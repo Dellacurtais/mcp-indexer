@@ -22,20 +22,23 @@ program
 program
   .command('serve')
   .description('Serve dense retrieval tools over MCP for an editor (reads the existing index).')
-  .argument('<root>', 'project root to serve (index it first with `index`)')
+  .argument(
+    '[root]',
+    'project root to serve; omit to auto-detect from the editor\'s MCP workspace roots (VS Code)',
+  )
   .option('--no-embeddings', 'do not seed local embeddings (FTS-only retrieval)')
   .option('--no-watch', 'do not run the incremental file watcher')
-  .action(async (root: string, opts: { embeddings?: boolean; watch?: boolean }) => {
+  .action(async (root: string | undefined, opts: { embeddings?: boolean; watch?: boolean }) => {
     await runServe(root, { noEmbeddings: opts.embeddings === false, watch: opts.watch !== false });
   });
 
 // Deprecated alias for the old broker entry — now serve-only.
 program
   .command('context', { hidden: true })
-  .argument('<root>')
+  .argument('[root]')
   .option('--no-embeddings')
   .option('--no-watch')
-  .action(async (root: string, opts: { embeddings?: boolean; watch?: boolean }) => {
+  .action(async (root: string | undefined, opts: { embeddings?: boolean; watch?: boolean }) => {
     await runServe(root, { noEmbeddings: opts.embeddings === false, watch: opts.watch !== false });
   });
 

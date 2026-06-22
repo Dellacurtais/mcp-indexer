@@ -1,23 +1,40 @@
 /**
- * `serve <root>` — the MCP server an editor (VS Code / IntelliJ Copilot) spawns.
+ * `serve [root]` — the MCP server an editor (VS Code / IntelliJ Copilot) spawns.
  *
- * Opens the EXISTING index for <root> and serves the curated, shaped retrieval
- * tools directly over stdio — no broker, no daemon, no spawn, so the handshake
- * is instant. It does NOT index on connect (run `code-context index <root>`
- * first); it does run a hardened incremental watcher so edits during the session
- * are reflected.
+ * Opens the EXISTING index and serves the curated, shaped retrieval tools
+ * directly over stdio — no broker/daemon/spawn, so the handshake is instant. It
+ * does NOT index on connect (run `index`, or call the `reindex` tool from chat).
+ *
+ * Project resolution, in order:
+ *   1. explicit `<root>` argument, if given;
+ *   2. the client's MCP **roots** (workspace folders) — VS Code provides these
+ *      automatically, so no path is needed there; JetBrains too if it exposes
+ *      roots;
+ *   3. otherwise: a clear error telling the user to pass an explicit path.
+ * (Never falls back to cwd — under JetBrains the cwd is the home dir.)
  */
+import { fileURLToPath } from 'node:url';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
+import type { FileWatcherService } from '@ctx/services/services/watcher.js';
 import { disposeIndexerProcessResources } from '@ctx/indexer/bootstrap/dispose.js';
 import { buildToolRegistry } from '../../mcp/tools/index.js';
-import { shapeRegistry } from '../../mcp/shaping.js';
+import { shapeRegistry, DEFAULT_ALLOWLIST } from '../../mcp/shaping.js';
 import { SERVER_INSTRUCTIONS } from '../../mcp/instructions.js';
-import { resolveRoot, openProject, startIncrementalWatch, scrubError, log } from './shared.js';
+import type { McpTool } from '../../mcp/tool.js';
+import type { ToolContext } from '../../mcp/context.js';
+import {
+  resolveRoot,
+  openProject,
+  startIncrementalWatch,
+  scrubError,
+  log,
+  type OpenedProject,
+} from './shared.js';
 
 const VERSION = '0.1.0';
 function serverName(): string {
@@ -29,31 +46,81 @@ export interface ServeOpts {
   watch?: boolean;
 }
 
-export async function runServe(rootArg: string, opts: ServeOpts): Promise<void> {
-  const root = resolveRoot(rootArg);
-  const opened = openProject(root, opts);
-  const registry = shapeRegistry(buildToolRegistry(), { projectName: opened.project.name });
+/** Ask the client for its workspace roots; return the first as a path, or null. */
+async function rootFromClientRoots(server: Server): Promise<string | null> {
+  try {
+    const res = await server.listRoots();
+    const uri = res.roots?.[0]?.uri;
+    if (!uri) return null;
+    return uri.startsWith('file:') ? fileURLToPath(uri) : uri;
+  } catch {
+    return null; // client doesn't expose roots
+  }
+}
+
+export async function runServe(rootArg: string | undefined, opts: ServeOpts): Promise<void> {
+  const base = buildToolRegistry();
+  const allowed = new Set(DEFAULT_ALLOWLIST);
+  // Static tool defs (allowlisted) — returned for ListTools without needing the
+  // project resolved yet, so the handshake/tool-list never blocks.
+  const staticDefs = [...base.values()]
+    .filter((t) => allowed.has(t.name))
+    .map((t) => ({ name: t.name, description: t.description, inputSchema: t.inputSchema }));
 
   const server = new Server(
     { name: serverName(), version: VERSION },
     { capabilities: { tools: {} }, instructions: SERVER_INSTRUCTIONS },
   );
 
-  server.setRequestHandler(ListToolsRequestSchema, async () => ({
-    tools: [...registry.values()].map((t) => ({
-      name: t.name,
-      description: t.description,
-      inputSchema: t.inputSchema,
-    })),
-  }));
+  let opened: OpenedProject | null = null;
+  let watcher: FileWatcherService | null = null;
+  let readyP: Promise<{ registry: Map<string, McpTool>; ctx: ToolContext }> | null = null;
+
+  const resolveAndOpen = async (): Promise<{ registry: Map<string, McpTool>; ctx: ToolContext }> => {
+    const rawRoot =
+      rootArg && rootArg.trim().length > 0 ? rootArg : await rootFromClientRoots(server);
+    if (!rawRoot) {
+      throw new Error(
+        'no workspace detected. Pass an explicit path in the MCP config ' +
+          '(…/dist/cli/index.js serve <project-root>) — your editor did not provide a workspace root.',
+      );
+    }
+    const root = resolveRoot(rawRoot);
+    opened = openProject(root, opts);
+    const registry = shapeRegistry(base, { projectName: opened.project.name });
+    if (opts.watch !== false) watcher = startIncrementalWatch(opened, root);
+    const fileCount = opened.db.getStats(opened.project.id).file_count ?? 0;
+    log(
+      `serving ${opened.project.name} (${root}) — ${registry.size} tools, ${fileCount} files indexed` +
+        (fileCount === 0 ? ` — ask me to "reindex" (or run: code-context index ${root})` : ''),
+    );
+    return { registry, ctx: opened.ctx };
+  };
+  const ready = (): Promise<{ registry: Map<string, McpTool>; ctx: ToolContext }> => {
+    if (!readyP) {
+      readyP = resolveAndOpen().catch((e) => {
+        readyP = null; // allow retry on the next call
+        throw e;
+      });
+    }
+    return readyP;
+  };
+
+  server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: staticDefs }));
 
   server.setRequestHandler(CallToolRequestSchema, async (req) => {
-    const tool = registry.get(req.params.name);
+    let r: { registry: Map<string, McpTool>; ctx: ToolContext };
+    try {
+      r = await ready();
+    } catch (e) {
+      return { content: [{ type: 'text', text: e instanceof Error ? e.message : String(e) }], isError: true };
+    }
+    const tool = r.registry.get(req.params.name);
     if (!tool) {
       return { content: [{ type: 'text', text: `unknown tool: ${req.params.name}` }], isError: true };
     }
     try {
-      const out = await tool.handler((req.params.arguments ?? {}) as Record<string, unknown>, opened.ctx);
+      const out = await tool.handler((req.params.arguments ?? {}) as Record<string, unknown>, r.ctx);
       return { content: [{ type: 'text', text: typeof out === 'string' ? out : String(out) }] };
     } catch (e) {
       const detail = e instanceof Error ? e.message : String(e);
@@ -62,15 +129,7 @@ export async function runServe(rootArg: string, opts: ServeOpts): Promise<void> 
     }
   });
 
-  // Connect first so `initialize`/`listTools` answer immediately.
-  await server.connect(new StdioServerTransport());
-  const fileCount = opened.db.getStats(opened.project.id).file_count ?? 0;
-  log(
-    `serving ${opened.project.name} (${root}) — ${registry.size} tools, ${fileCount} files indexed` +
-      (fileCount === 0 ? ` — run "code-context index ${root}" to build the index` : ''),
-  );
-
-  const watcher = opts.watch === false ? null : startIncrementalWatch(opened, root);
+  await server.connect(new StdioServerTransport()); // instant handshake
 
   let shuttingDown = false;
   const shutdown = async (): Promise<void> => {
@@ -89,7 +148,7 @@ export async function runServe(rootArg: string, opts: ServeOpts): Promise<void> 
       /* ignore */
     }
     try {
-      opened.db.close();
+      opened?.db.close();
     } catch {
       /* ignore */
     }
@@ -98,5 +157,4 @@ export async function runServe(rootArg: string, opts: ServeOpts): Promise<void> 
   };
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
-  // stdio transport keeps the process alive until the editor closes the pipe.
 }

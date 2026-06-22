@@ -58,17 +58,21 @@ On the first `index` with embeddings enabled, the local model (~100 MB,
 
 ## Editor setup (Copilot **Agent mode** required)
 
-**First, index the repo** (once): `node /abs/path/to/code-context/dist/cli/index.js index <repo>`.
-Then register the `serve` command below. Multiple repos = one `serve` entry per repo.
+`serve` auto-detects the open project from the editor's **MCP workspace roots** — so you usually
+**don't pass a path at all**. (No prior `index` needed either: when the index is empty the agent
+calls the `reindex` tool — or you can ask it to "reindex".) Pass an explicit path only if your
+editor doesn't expose roots.
 
 ### VS Code — `.vscode/mcp.json` (commit it to share with the repo)
+
+VS Code provides workspace roots automatically, so omit the path:
 
 ```json
 {
   "servers": {
     "code-context": {
       "command": "node",
-      "args": ["/abs/path/to/code-context/dist/cli/index.js", "serve", "${workspaceFolder}"],
+      "args": ["/abs/path/to/code-context/dist/cli/index.js", "serve"],
       "env": { "MCP_SERVER_NAME": "code-context", "MCP_OUTPUT_CAP_LEVEL": "economic" }
     }
   }
@@ -80,20 +84,23 @@ Open Copilot Chat → switch the mode dropdown to **Agent** (MCP tools are invis
 ### JetBrains (IntelliJ IDEA / PyCharm / WebStorm)
 
 GitHub Copilot icon in the status bar → **Edit Settings** → **Model Context Protocol** →
-**Configure** (this opens the global `~/.config/github-copilot/intellij/mcp.json`). Add — note the
-**explicit absolute path** (JetBrains has no `${workspaceFolder}`, and the spawn cwd is not the
-project, so a path is required):
+**Configure** (this opens the global `~/.config/github-copilot/intellij/mcp.json`). Try **without a
+path first** (relies on the editor exposing roots):
 
 ```json
 {
   "servers": {
     "code-context": {
       "command": "node",
-      "args": ["/abs/path/to/code-context/dist/cli/index.js", "serve", "D:/abs/path/to/your/repo"],
+      "args": ["/abs/path/to/code-context/dist/cli/index.js", "serve"],
       "env": { "MCP_SERVER_NAME": "code-context" }
     }
   }
 }
+```
+
+If a tool call reports *"no workspace detected"* (the JetBrains Copilot build doesn't expose roots
+yet), add the **explicit absolute project path** as the last arg — `"serve", "D:/abs/path/to/your/repo"`.
 ```
 
 Use Copilot Chat in **Agent** mode (MCP tools are invisible in Ask/Edit).
