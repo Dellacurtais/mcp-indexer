@@ -14,10 +14,10 @@ program
 program
   .command('context')
   .description('Broker: --daemon indexes+watches+serves; default is the stdio MCP shim for an editor')
-  .argument('<root>', 'project root directory to index and serve')
+  .argument('[root]', 'project root to index and serve (default: current working directory)')
   .option('--daemon', 'run the long-running index + watch + serve daemon')
   .option('--no-embeddings', 'structural + FTS only (skip seeding local ONNX embeddings)')
-  .action(async (root: string, opts: { daemon?: boolean; embeddings?: boolean }) => {
+  .action(async (root: string | undefined, opts: { daemon?: boolean; embeddings?: boolean }) => {
     await runContextCommand(
       root,
       { daemon: opts.daemon, noEmbeddings: opts.embeddings === false },

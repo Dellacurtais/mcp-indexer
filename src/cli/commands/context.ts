@@ -44,11 +44,14 @@ export interface ContextCommandOpts {
 }
 
 export async function runContextCommand(
-  rootArg: string,
+  rootArg: string | undefined,
   opts: ContextCommandOpts,
   cliPath: string,
 ): Promise<void> {
-  const root = path.resolve(rootArg);
+  // Default to the current working directory when no path is given — lets a
+  // single editor MCP entry (with no hardcoded path) target whatever project the
+  // editor launched the server in.
+  const root = path.resolve(rootArg && rootArg.length > 0 ? rootArg : process.cwd());
   if (opts.daemon) {
     await runDaemon(root, opts);
   } else {
