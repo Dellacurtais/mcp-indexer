@@ -120,7 +120,7 @@ its work before guessing or reading whole files.
 `get_project_overview`, `get_project_pulse`, `get_project_stats`, `get_file_skeleton`,
 `get_file_structure`, `read_file`, `find_references`, `get_symbol_body`, `get_class_members`,
 `get_hierarchy`, `find_implementations`, `prepare_edit`, `list_directory`, `get_dependencies`,
-`get_dependents`.
+`get_dependents`, `reindex` (agent-triggered: build/refresh the index from chat — no terminal needed).
 
 ## Configuration (env)
 

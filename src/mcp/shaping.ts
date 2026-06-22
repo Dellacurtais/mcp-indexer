@@ -63,6 +63,7 @@ export const DEFAULT_ALLOWLIST: readonly string[] = [
   'get_dependencies',
   'get_dependents',
   'pack_context',
+  'reindex',
 ];
 
 export interface ShapeOptions {

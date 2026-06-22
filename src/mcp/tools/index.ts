@@ -4,6 +4,7 @@ import { searchTools } from './search.js';
 import { fileTools } from './file.js';
 import { symbolTools } from './symbols.js';
 import { packTools } from './pack.js';
+import { maintenanceTools } from './reindex.js';
 
 /**
  * Retrieval-only MCP tools, grouped by domain. The upstream server also exposed
@@ -17,6 +18,7 @@ export const allTools: McpTool[] = [
   ...fileTools,
   ...symbolTools,
   ...packTools,
+  ...maintenanceTools,
 ];
 
 export function buildToolRegistry(): Map<string, McpTool> {
