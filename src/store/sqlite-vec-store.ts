@@ -17,6 +17,8 @@
  * loudly from vec0, which is the signal a re-index is needed.
  */
 import { createRequire } from 'node:module';
+import { mkdirSync } from 'node:fs';
+import { dirname } from 'node:path';
 import type DatabaseConstructor from 'better-sqlite3';
 import type { VectorRecord, VectorMatch } from '@ctx/shared/types.js';
 import { codeNamespace } from '@ctx/shared/vector-namespace.js';
@@ -53,6 +55,9 @@ export class SqliteVecVectorStore implements VectorStore {
   private dim: number | null = null;
 
   constructor(opts: { path: string }) {
+    // Ensure the parent dir exists — better-sqlite3 won't create it, and the
+    // default vectors path can land in a fresh ~/.code-context dir.
+    mkdirSync(dirname(opts.path), { recursive: true });
     this.db = new Database(opts.path);
     this.db.pragma('journal_mode = WAL');
     // WAL's standard pairing — vectors are derivable data and upserts come in
