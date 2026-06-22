@@ -13,6 +13,7 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
+import { SERVER_INSTRUCTIONS } from './instructions.js';
 
 export interface ShimOptions {
   baseUrl: string; // e.g. http://127.0.0.1:53111
@@ -23,7 +24,7 @@ export interface ShimOptions {
 export async function runStdioShim(opts: ShimOptions): Promise<void> {
   const server = new Server(
     { name: opts.serverName, version: opts.version },
-    { capabilities: { tools: {} } },
+    { capabilities: { tools: {} }, instructions: SERVER_INSTRUCTIONS },
   );
 
   // Timeouts so a wedged/slow daemon never hangs the editor's tool call forever.
