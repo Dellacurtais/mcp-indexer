@@ -60,15 +60,22 @@ export async function runContextCommand(
 }
 
 async function runShim(root: string, opts: ContextCommandOpts, cliPath: string): Promise<void> {
-  const { baseUrl } = await ensureDaemon(root, {
-    cliPath,
-    noEmbeddings: opts.noEmbeddings,
-    env: {
-      MCP_SERVER_NAME: serverName(),
-      MCP_OUTPUT_CAP_LEVEL: process.env.MCP_OUTPUT_CAP_LEVEL,
-    },
+  // Connect the stdio transport first; ensure the daemon lazily/in the
+  // background (see runStdioShim) so the MCP handshake is never blocked on
+  // first-run indexing / model download.
+  await runStdioShim({
+    serverName: serverName(),
+    version: VERSION,
+    ensure: () =>
+      ensureDaemon(root, {
+        cliPath,
+        noEmbeddings: opts.noEmbeddings,
+        env: {
+          MCP_SERVER_NAME: serverName(),
+          MCP_OUTPUT_CAP_LEVEL: process.env.MCP_OUTPUT_CAP_LEVEL,
+        },
+      }),
   });
-  await runStdioShim({ baseUrl, serverName: serverName(), version: VERSION });
 }
 
 async function runDaemon(root: string, opts: ContextCommandOpts): Promise<void> {

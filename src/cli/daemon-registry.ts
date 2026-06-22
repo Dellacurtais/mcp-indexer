@@ -166,9 +166,12 @@ export async function ensureDaemon(
     // for a compiled dist (.js) entry execArgv is empty, so this is a no-op there.
     const args = [...process.execArgv, opts.cliPath, 'context', root, '--daemon'];
     if (opts.noEmbeddings) args.push('--no-embeddings');
+    // Capture the detached daemon's stdout+stderr to a log so a silent startup
+    // crash is diagnosable (otherwise ensureDaemon just times out blind).
+    const logFd = fs.openSync(path.join(ctxDir(root), 'daemon.log'), 'a');
     const child = spawn(process.execPath, args, {
       detached: true,
-      stdio: 'ignore',
+      stdio: ['ignore', logFd, logFd],
       env: { ...process.env, ...opts.env },
     });
     child.unref();
