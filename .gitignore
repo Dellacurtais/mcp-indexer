@@ -1,0 +1,9 @@
+node_modules/
+dist/
+*.log
+.DS_Store
+.mcp-context/
+*.db
+*.db-wal
+*.db-shm
+scripts/_tmp*

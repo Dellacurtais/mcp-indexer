@@ -1,0 +1,36 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2023"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "declaration": false,
+    "sourceMap": true,
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "strict": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "baseUrl": ".",
+    "paths": {
+      "@ctx/shared": ["src/shared/index.ts"],
+      "@ctx/shared/*": ["src/shared/*"],
+      "@ctx/store": ["src/store/index.ts"],
+      "@ctx/store/*": ["src/store/*"],
+      "@ctx/candidate-pipeline": ["src/candidate-pipeline/index.ts"],
+      "@ctx/candidate-pipeline/*": ["src/candidate-pipeline/*"],
+      "@ctx/indexer": ["src/indexer/index.ts"],
+      "@ctx/indexer/*": ["src/indexer/*"],
+      "@ctx/services": ["src/services/index.ts"],
+      "@ctx/services/*": ["src/services/*"],
+      "@ctx/reducers/*": ["src/reducers/*"],
+      "@ctx/mcp/*": ["src/mcp/*"]
+    }
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["dist", "node_modules", "**/__tests__/**", "**/*.test.ts"]
+}
