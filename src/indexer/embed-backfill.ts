@@ -23,8 +23,12 @@ import {
   type CandidateFile,
   type CandidateSymbol,
 } from '@ctx/indexer/indexer/indexer/embedding-candidates.js';
+import { EmbedWorkerClient } from '@ctx/indexer/embed-worker-client.js';
 
 const BATCH = Math.max(1, Number(process.env.MCP_EMBED_BATCH ?? 64));
+// Above this many candidates, a LOCAL backfill moves to a worker thread so the
+// main ONNX session stays free for live query embedding.
+const WORKER_THRESHOLD = Math.max(1, Number(process.env.MCP_EMBED_WORKER_MIN ?? 400));
 
 export interface EmbedBackfillResult {
   candidates: number;
@@ -95,13 +99,27 @@ export async function runEmbedBackfill(
   const candidates = buildEmbeddingCandidates(db, project, candidateFiles);
   if (candidates.length === 0) return { candidates: 0, embedded: 0, batches: 0 };
 
+  // For a large LOCAL backfill, embed on a worker thread (its own ONNX session)
+  // so the main thread's session stays free to embed live search queries — the
+  // local service serializes on one session, so an in-process backfill would
+  // otherwise starve semantic search until it finishes. Small/incremental
+  // backfills embed inline (a worker's second model load isn't worth it).
+  const fp = embeddingService.fingerprint?.() ?? '';
+  const isLocal = fp.startsWith('local:');
+  const useWorker = isLocal && candidates.length >= WORKER_THRESHOLD;
+  let worker: EmbedWorkerClient | null = null;
+  const embedBatch: (texts: string[]) => Promise<{ vectors: number[][] }> = useWorker
+    ? (worker = new EmbedWorkerClient(fp.slice('local:'.length))).embed.bind(worker)
+    : (texts) => embeddingService.embed(texts);
+
   const ns = codeNamespace(project.name);
   let embedded = 0;
   let batches = 0;
+  try {
   for (let i = 0; i < candidates.length; i += BATCH) {
     if (opts.signal?.aborted) break;
     const chunk = candidates.slice(i, i + BATCH);
-    const { vectors } = await embeddingService.embed(chunk.map((c) => c.text));
+    const { vectors } = await embedBatch(chunk.map((c) => c.text));
     const records: VectorRecord[] = chunk.map((c, j) => ({
       id: c.id,
       values: vectors[j],
@@ -133,6 +151,9 @@ export async function runEmbedBackfill(
     embedded += chunk.length;
     batches += 1;
     opts.onProgress?.(embedded, candidates.length);
+  }
+  } finally {
+    await worker?.dispose();
   }
   return { candidates: candidates.length, embedded, batches };
 }
