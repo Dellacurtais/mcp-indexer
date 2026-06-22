@@ -71,8 +71,8 @@ Open Copilot Chat → switch the mode dropdown to **Agent** (MCP tools are invis
 
 ### JetBrains (IntelliJ IDEA / PyCharm / WebStorm)
 
-Click the **GitHub Copilot** icon in the status bar → **Edit Settings** → **Model Context
-Protocol** → **Configure**, and add the same JSON shape:
+GitHub Copilot icon in the status bar → **Edit Settings** → **Model Context Protocol** →
+**Configure** (this opens the global `~/.config/github-copilot/intellij/mcp.json`). Add:
 
 ```json
 {
@@ -85,7 +85,22 @@ Protocol** → **Configure**, and add the same JSON shape:
 }
 ```
 
-Use Copilot Chat in **Agent** mode.
+Use Copilot Chat in **Agent** mode (MCP tools are invisible in Ask/Edit).
+
+## Agent skill — make Copilot actually use it
+
+The server already ships a usage guide in its MCP handshake (`instructions`), but to make
+the agent *reach for* these tools, add repository **custom instructions** — the
+"skill" GitHub Copilot honors in VS Code and JetBrains. Copy the template into the repo
+you point Copilot at:
+
+```
+cp /abs/path/to/code-context/templates/copilot-instructions.md  <your-repo>/.github/copilot-instructions.md
+```
+
+(JetBrains also picks up nested `AGENTS.md` / `CLAUDE.md` via Settings → GitHub Copilot →
+Customizations.) The template tells the agent to call `pack_context`/`search`/etc. to ground
+its work before guessing or reading whole files.
 
 ## Tools exposed (read-only)
 
