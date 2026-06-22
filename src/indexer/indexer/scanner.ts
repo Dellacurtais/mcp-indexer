@@ -121,7 +121,12 @@ export class FileScanner {
       const absPath = join(this.rootPath, relPath);
       const normalizedPath = relPath.replace(/\\/g, '/');
 
-      const st = statSync(absPath, { throwIfNoEntry: false });
+      let st: ReturnType<typeof statSync>;
+      try {
+        st = statSync(absPath, { throwIfNoEntry: false });
+      } catch {
+        continue; // EACCES/EPERM on a stray path (e.g. a system socket) — skip, don't abort the scan
+      }
       if (!st?.isFile()) continue;
       if (st.size > this.maxFileSizeBytes) { stats.skippedTooLarge++; continue; }
 

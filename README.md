@@ -13,17 +13,19 @@ smarter and cheaper by giving it high-signal, token-economical retrieval over yo
   dense output and never has to supply boilerplate args.
 - **Read-only** — a curated retrieval surface; the assistant keeps its own edit/run loop.
 
-## How it works (broker)
+## How it works
 
 ```
-VS Code Copilot ─┐                                   ┌─ chokidar watcher (incremental reindex)
-                 ├─ spawn(stdio) → shim ──HTTP loop→ DAEMON ─┼─ SQLite index + sqlite-vec
-IntelliJ Copilot ┘   (MCP proxy)   (1 per editor)            └─ hybrid search + reranker + MCP tools
+1) index  (you, once)        2) serve  (the editor spawns this)
+   tree-sitter + FTS  ─┐         stdio MCP server ──reads──┐
+   local ONNX embeds  ─┼─→ SQLite index + sqlite-vec ←─────┤  hybrid search + reranker + tools
+   reranker model     ─┘         + hardened incremental watcher (keeps it fresh live)
 ```
 
-One **daemon** per project indexes + watches + serves (one warm index). Each editor spawns a
-tiny **stdio shim** that proxies MCP calls to the daemon, so VS Code and IntelliJ share the same
-index. The shim auto-starts the daemon on first use (lockfile under `<root>/.mcp-context/`).
+Indexing is an explicit step (`index`). The MCP server (`serve`) reads that on-disk index and
+serves the tools — it connects instantly (no indexing on connect) and runs a hardened incremental
+watcher so edits during a session are reflected. The index file is the shared state; multiple
+editors can serve the same repo.
 
 ## Install & build
 
@@ -37,21 +39,27 @@ Requires Node 22+.
 ## Run
 
 ```bash
-# What an editor runs (stdio shim; auto-starts the daemon):
-node dist/cli/index.js context /path/to/your/repo
+# 1. Index the repo once (foreground, shows progress). Re-run anytime to refresh.
+node dist/cli/index.js index /abs/path/to/your/repo
 
-# Run the daemon directly (foreground), e.g. to watch logs:
-node dist/cli/index.js context /path/to/your/repo --daemon
+#    Structural + FTS only (skip the local embedding model download):
+node dist/cli/index.js index /abs/path/to/your/repo --no-embeddings
 
-# Structural + FTS only (skip local embeddings / model download):
-node dist/cli/index.js context /path/to/your/repo --daemon --no-embeddings
+#    Optional: index then keep watching (a persistent background indexer):
+node dist/cli/index.js index /abs/path/to/your/repo --watch
+
+# 2. Serve over MCP (this is what the editor runs). Instant; reads the index above.
+node dist/cli/index.js serve /abs/path/to/your/repo
 ```
 
-On first run with embeddings enabled, the local model (~100 MB, `Xenova/multilingual-e5-small`)
-downloads once to `~/.mcp/models`. Search serves immediately in FTS mode and upgrades to
-semantic/hybrid as embeddings land in the background.
+On the first `index` with embeddings enabled, the local model (~100 MB,
+`Xenova/multilingual-e5-small`) downloads once to `~/.mcp/models`. After that it is fully offline.
+`serve` requires an **explicit, real project path** (it refuses your home dir or a drive root).
 
 ## Editor setup (Copilot **Agent mode** required)
+
+**First, index the repo** (once): `node /abs/path/to/code-context/dist/cli/index.js index <repo>`.
+Then register the `serve` command below. Multiple repos = one `serve` entry per repo.
 
 ### VS Code — `.vscode/mcp.json` (commit it to share with the repo)
 
@@ -60,7 +68,7 @@ semantic/hybrid as embeddings land in the background.
   "servers": {
     "code-context": {
       "command": "node",
-      "args": ["/abs/path/to/code-context/dist/cli/index.js", "context", "${workspaceFolder}"],
+      "args": ["/abs/path/to/code-context/dist/cli/index.js", "serve", "${workspaceFolder}"],
       "env": { "MCP_SERVER_NAME": "code-context", "MCP_OUTPUT_CAP_LEVEL": "economic" }
     }
   }
@@ -72,14 +80,17 @@ Open Copilot Chat → switch the mode dropdown to **Agent** (MCP tools are invis
 ### JetBrains (IntelliJ IDEA / PyCharm / WebStorm)
 
 GitHub Copilot icon in the status bar → **Edit Settings** → **Model Context Protocol** →
-**Configure** (this opens the global `~/.config/github-copilot/intellij/mcp.json`). Add:
+**Configure** (this opens the global `~/.config/github-copilot/intellij/mcp.json`). Add — note the
+**explicit absolute path** (JetBrains has no `${workspaceFolder}`, and the spawn cwd is not the
+project, so a path is required):
 
 ```json
 {
   "servers": {
     "code-context": {
       "command": "node",
-      "args": ["/abs/path/to/code-context/dist/cli/index.js", "context", "<project root>"]
+      "args": ["/abs/path/to/code-context/dist/cli/index.js", "serve", "D:/abs/path/to/your/repo"],
+      "env": { "MCP_SERVER_NAME": "code-context" }
     }
   }
 }

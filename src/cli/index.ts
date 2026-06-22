@@ -1,9 +1,7 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
-import { fileURLToPath } from 'node:url';
-import { runContextCommand } from './commands/context.js';
-
-const cliPath = fileURLToPath(import.meta.url);
+import { runIndex } from './commands/index-cmd.js';
+import { runServe } from './commands/serve.js';
 
 const program = new Command();
 program
@@ -12,17 +10,33 @@ program
   .version('0.1.0');
 
 program
-  .command('context')
-  .description('Broker: --daemon indexes+watches+serves; default is the stdio MCP shim for an editor')
-  .argument('[root]', 'project root to index and serve (default: current working directory)')
-  .option('--daemon', 'run the long-running index + watch + serve daemon')
-  .option('--no-embeddings', 'structural + FTS only (skip seeding local ONNX embeddings)')
-  .action(async (root: string | undefined, opts: { daemon?: boolean; embeddings?: boolean }) => {
-    await runContextCommand(
-      root,
-      { daemon: opts.daemon, noEmbeddings: opts.embeddings === false },
-      cliPath,
-    );
+  .command('index')
+  .description('Build/refresh a project index (structural + local embeddings). Run this first.')
+  .argument('<root>', 'project root to index')
+  .option('--no-embeddings', 'structural + FTS only (skip local embeddings)')
+  .option('--watch', 'keep watching for changes after indexing (incremental)')
+  .action(async (root: string, opts: { embeddings?: boolean; watch?: boolean }) => {
+    await runIndex(root, { noEmbeddings: opts.embeddings === false, watch: !!opts.watch });
+  });
+
+program
+  .command('serve')
+  .description('Serve dense retrieval tools over MCP for an editor (reads the existing index).')
+  .argument('<root>', 'project root to serve (index it first with `index`)')
+  .option('--no-embeddings', 'do not seed local embeddings (FTS-only retrieval)')
+  .option('--no-watch', 'do not run the incremental file watcher')
+  .action(async (root: string, opts: { embeddings?: boolean; watch?: boolean }) => {
+    await runServe(root, { noEmbeddings: opts.embeddings === false, watch: opts.watch !== false });
+  });
+
+// Deprecated alias for the old broker entry — now serve-only.
+program
+  .command('context', { hidden: true })
+  .argument('<root>')
+  .option('--no-embeddings')
+  .option('--no-watch')
+  .action(async (root: string, opts: { embeddings?: boolean; watch?: boolean }) => {
+    await runServe(root, { noEmbeddings: opts.embeddings === false, watch: opts.watch !== false });
   });
 
 program.parseAsync(process.argv).catch((e) => {

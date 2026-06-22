@@ -39,6 +39,12 @@ export class FileWatcherService {
       '**/build/**',
       '**/.next/**',
       '**/coverage/**',
+      // Windows system / special folders that throw EPERM/EACCES when watched
+      // (relevant if a root accidentally points high, e.g. the home dir).
+      '**/AppData/**',
+      '**/$Recycle.Bin/**',
+      '**/System Volume Information/**',
+      '**/Ambiente de Impressão/**',
       ...(options.ignorePatterns ?? []),
     ];
 
@@ -50,6 +56,17 @@ export class FileWatcherService {
         stabilityThreshold: 500,
         pollInterval: 100,
       },
+    });
+
+    // CRITICAL: chokidar emits an 'error' event (e.g. EPERM/EACCES on an
+    // unwatchable subdir). Without a handler, Node turns an unhandled 'error'
+    // on an EventEmitter into an uncaught exception that crashes the process.
+    // Log and ignore — one bad path must never take down the server.
+    watcher.on('error', (err) => {
+      const e = err as { code?: string; path?: string; message?: string };
+      process.stderr.write(
+        `[code-context] watcher: skipping unwatchable path (${e.code ?? 'error'})${e.path ? ` ${e.path}` : ''}\n`,
+      );
     });
 
     this.pendingChanges.set(projectId, new Map());
