@@ -4,7 +4,18 @@ import { defineTool, type McpTool } from '../tool.js';
 import { grepInFiles } from '@ctx/services/services/code-reader.js';
 import { buildContentMatchQuery } from '@ctx/indexer/search/content-grep.js';
 import type { SearchMode, SearchType } from '@ctx/shared/types.js';
+import { languageIdForPath } from '@ctx/shared/utils/language-id.js';
 import { withProject } from './_helpers.js';
+
+/** Normalize a languages arg (array or comma-string) to a lowercased Set. */
+function toLangSet(v: unknown): Set<string> {
+  const items = Array.isArray(v)
+    ? v
+    : typeof v === 'string'
+      ? v.split(',')
+      : [];
+  return new Set(items.map((s) => String(s).trim().toLowerCase()).filter(Boolean));
+}
 import { renderDegradedTrailer, renderZeroResultDiagnostics } from './search-diagnostics.js';
 
 const DISK_FALLBACK_MAX_FILES = 2000;
@@ -39,7 +50,8 @@ export async function scanDiskForGrep(rootPath: string, glob: string | undefined
 
 const search = defineTool({
   name: 'search',
-  description: 'Search files and symbols in a project (FTS + semantic). mode defaults to auto: the planner routes identifier-shaped queries to fast FTS and natural-language queries to hybrid.',
+  description:
+    'Search files and symbols (FTS + semantic). mode=auto routes identifier queries to FTS and natural language to hybrid. Refine to cut noise: set type="symbols" for code symbols, and languages=["typescript"] (or exclude_languages=["css","scss","html"]) to scope by language.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -48,6 +60,16 @@ const search = defineTool({
       mode: { type: 'string', enum: ['auto', 'fts', 'vector', 'hybrid'] },
       type: { type: 'string', enum: ['files', 'symbols', 'all'] },
       limit: { type: 'number' },
+      languages: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'keep only these languages, e.g. ["typescript"]',
+      },
+      exclude_languages: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'drop these languages, e.g. ["css","scss","html"]',
+      },
     },
     required: ['project_name', 'query'],
   },
@@ -56,11 +78,33 @@ const search = defineTool({
     // natural language → hybrid. Forcing 'hybrid' here made every symbol
     // lookup pay HyDE + multi-variant embedding + rerank for nothing.
     const requestedMode = (args.mode as SearchMode) ?? 'auto';
-    const { results, diagnostics } = await hybridSearch.searchWithDiag(project.id, project.name, args.query as string, {
+    const limit = (args.limit as number) ?? 20;
+    const include = toLangSet(args.languages);
+    const exclude = toLangSet(args.exclude_languages);
+    const hasLangFilter = include.size > 0 || exclude.size > 0;
+
+    const { results: raw, diagnostics } = await hybridSearch.searchWithDiag(project.id, project.name, args.query as string, {
       mode: requestedMode,
       type: (args.type as SearchType) ?? 'all',
-      limit: (args.limit as number) ?? 20,
+      // Over-fetch when filtering by language so enough survive to fill `limit`.
+      limit: hasLangFilter ? Math.min(limit * 5, 100) : limit,
     });
+
+    const results = hasLangFilter
+      ? raw
+          .filter((r) => {
+            const d = r.data as unknown as Record<string, unknown>;
+            const p = String((r.type === 'file' ? d.path : d.file_path) ?? '');
+            const lang = (
+              r.type === 'file' && typeof d.language === 'string' ? d.language : languageIdForPath(p)
+            ).toLowerCase();
+            if (include.size > 0 && !include.has(lang)) return false;
+            if (exclude.has(lang)) return false;
+            return true;
+          })
+          .slice(0, limit)
+      : raw;
+
     if (results.length === 0) {
       return renderZeroResultDiagnostics(requestedMode, diagnostics, () => ({
         ...db.getEmbeddingCoverage(project.id),

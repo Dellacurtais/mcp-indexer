@@ -3,7 +3,11 @@
  * `projects`. Results go to stdout (pipeable); progress/errors to stderr.
  */
 import { disposeIndexerProcessResources } from '@ctx/indexer/bootstrap/dispose.js';
+import { languageIdForPath } from '@ctx/shared/utils/language-id.js';
 import { resolveRoot, openProject, openDb, log } from './shared.js';
+
+const toLangSet = (v: string | undefined): Set<string> =>
+  new Set((v ?? '').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean));
 
 const out = (s: string): void => {
   process.stdout.write(s.endsWith('\n') ? s : s + '\n');
@@ -65,6 +69,8 @@ export interface SearchOpts {
   mode?: string;
   type?: string;
   limit?: string;
+  lang?: string;
+  excludeLang?: string;
 }
 
 /** `search <query> [root]` — query the index and print ranked hits. */
@@ -80,16 +86,34 @@ export async function runSearch(
       out(`not indexed: ${root}\n  run:  code-context index "${root}"`);
       return;
     }
-    const results = await opened.ctx.hybridSearch.search(
+    const limit = opts.limit ? Math.max(1, Number(opts.limit)) : 15;
+    const include = toLangSet(opts.lang);
+    const exclude = toLangSet(opts.excludeLang);
+    const hasLangFilter = include.size > 0 || exclude.size > 0;
+    const raw = await opened.ctx.hybridSearch.search(
       opened.project.id,
       opened.project.name,
       query,
       {
         mode: (opts.mode as 'auto' | 'fts' | 'vector' | 'hybrid') ?? 'auto',
         type: (opts.type as 'files' | 'symbols' | 'all') ?? 'all',
-        limit: opts.limit ? Math.max(1, Number(opts.limit)) : 15,
+        limit: hasLangFilter ? Math.min(limit * 5, 100) : limit,
       },
     );
+    const results = hasLangFilter
+      ? raw
+          .filter((r) => {
+            const d = r.data as unknown as Record<string, unknown>;
+            const p = String((r.type === 'file' ? d.path : d.file_path) ?? '');
+            const lang = (
+              r.type === 'file' && typeof d.language === 'string' ? d.language : languageIdForPath(p)
+            ).toLowerCase();
+            if (include.size > 0 && !include.has(lang)) return false;
+            if (exclude.has(lang)) return false;
+            return true;
+          })
+          .slice(0, limit)
+      : raw;
     if (results.length === 0) {
       out('No results.');
       return;

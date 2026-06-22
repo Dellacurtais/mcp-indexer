@@ -49,9 +49,17 @@ program
   .option('--mode <mode>', 'auto | fts | vector | hybrid', 'auto')
   .option('--type <type>', 'files | symbols | all', 'all')
   .option('--limit <n>', 'max results', '15')
-  .action(async (query: string, root: string | undefined, opts: { mode?: string; type?: string; limit?: string }) => {
-    await runSearch(query, root, opts);
-  });
+  .option('--lang <list>', 'keep only these languages (comma-separated), e.g. typescript')
+  .option('--exclude-lang <list>', 'drop these languages, e.g. css,scss,html')
+  .action(
+    async (
+      query: string,
+      root: string | undefined,
+      opts: { mode?: string; type?: string; limit?: string; lang?: string; excludeLang?: string },
+    ) => {
+      await runSearch(query, root, opts);
+    },
+  );
 
 program
   .command('projects')

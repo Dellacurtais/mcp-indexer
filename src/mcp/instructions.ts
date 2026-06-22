@@ -14,6 +14,7 @@ Recommended flow for a coding task:
 3. Drill: \`get_file_skeleton\`/\`get_file_structure\` for a file's symbols without bodies; \`read_file\` (supports symbol/line slicing) for specifics; \`find_references\`, \`get_symbol_body\`, \`get_class_members\`, \`get_hierarchy\`, \`find_implementations\`, \`prepare_edit\` to navigate; \`get_dependencies\`/\`get_dependents\` for the import graph.
 
 Tips:
+- Cut noise: for code, pass \`type:"symbols"\` and scope by language — \`languages:["typescript"]\` or \`exclude_languages:["css","scss","html"]\` on \`search\`, or \`language\`/\`glob\` on \`grep_code\`.
 - If \`get_project_pulse\` shows 0 files (or 0% vector coverage and you need semantic search), call \`reindex\` once — it builds/refreshes the index in the background and returns immediately; re-check the pulse for progress.
 - \`project_name\` is injected automatically — you can omit it.
 - Prefer these tools over re-reading whole files: outputs are pre-summarized and token-capped, so they are cheaper and denser.
