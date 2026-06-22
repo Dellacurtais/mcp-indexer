@@ -126,18 +126,21 @@ const get_file_structure = defineTool({
     const deps = db.getDependencies(file.id, project.id);
     const dependents = db.getDependents(project.id, file.id);
 
-    const sections = [
-      `# ${file.path}`,
-      `Language: ${file.language} | Lines: ${file.line_count} | Complexity: ${file.complexity} | Layer: ${file.layer}`,
-      file.is_entry_point ? 'Entry Point: yes' : '',
-      file.is_test ? 'Test File: yes' : '',
-      '',
-      `## Summary`,
-      file.summary || '(not semantically indexed yet — structural data below is current)',
-      '',
-      `## Concepts`,
-      concepts.join(', '),
+    const role = inferFileRole(file.path);
+    const metaBits = [
+      file.complexity && file.complexity !== 'unknown' ? `complexity=${file.complexity}` : '',
+      file.layer && file.layer !== 'unknown' ? `layer=${file.layer}` : '',
+      file.is_entry_point ? 'entry-point' : '',
+      file.is_test ? 'test' : '',
     ].filter(Boolean);
+    const sections = [
+      `# ${file.path} · ${file.line_count} lines · ${file.language}`,
+      role ? `Role: ${role}` : '',
+      metaBits.length ? metaBits.join(' | ') : '',
+    ].filter(Boolean);
+    // Drop the empty Summary/Concepts blocks (no LLM enrichment in this build).
+    if (file.summary) sections.push('', '## Summary', file.summary);
+    if (concepts.length) sections.push('', `Concepts: ${concepts.join(', ')}`);
 
     if (deps.length > 0) {
       sections.push('', '## Dependencies (imports)', deps.map(d => `- [${d.dep_type}] ${d.import_path}${d.target_file_path ? ` → ${d.target_file_path}` : ''}`).join('\n'));

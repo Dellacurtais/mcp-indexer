@@ -24,7 +24,18 @@ const get_project_stats = defineTool({
     required: ['project_name'],
   },
   handler: withProject((args, { db }, project) => {
-    return JSON.stringify(db.getStats(project.id), null, 2);
+    const s = db.getStats(project.id);
+    const langs = Object.entries(s.languages)
+      .sort((a, b) => b[1] - a[1])
+      .map(([l, c]) => `${l}(${c})`)
+      .join(' ');
+    return [
+      `# ${project.name}`,
+      `files: ${s.file_count} · symbols: ${s.symbol_count} · lines: ${s.total_lines}`,
+      langs ? `langs: ${langs}` : '',
+    ]
+      .filter(Boolean)
+      .join('\n');
   }),
 });
 

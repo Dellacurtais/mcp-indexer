@@ -127,14 +127,13 @@ const get_class_members = defineTool({
 
 const find_references = defineTool({
   name: 'find_references',
-  description: 'Find all files that reference a symbol. When the symbol name is ambiguous, the response includes a list of candidate definitions; pass file_path to scope references to a specific definition. Pass format="json" for a structured response.',
+  description: 'Find all files that reference a symbol. When the symbol name is ambiguous, the response includes a list of candidate definitions; pass file_path to scope references to a specific definition.',
   inputSchema: {
     type: 'object',
     properties: {
       project_name: { type: 'string' },
       symbol_name: { type: 'string' },
       file_path: { type: 'string', description: 'Optional, for disambiguation when symbol_name is defined in multiple files' },
-      format: { type: 'string', enum: ['text', 'json'] },
       force_reread: {
         type: 'boolean',
         description: 'Bypass the duplicate-result check. Use ONLY when you legitimately believe the underlying data changed since a previous fetch (file edited, index re-built). Default false.',
@@ -354,14 +353,13 @@ const trace_usage = defineTool({
 
 const get_symbol_body = defineTool({
   name: 'get_symbol_body',
-  description: 'Extract just the body (line range) of a symbol — token-cheap alternative to reading the whole file. In JSON mode, returns ambiguous candidate list when symbol_name matches multiple definitions without file_path. Pass format="json" for a structured response.',
+  description: 'Extract just the body (line range) of a symbol — token-cheap alternative to reading the whole file.',
   inputSchema: {
     type: 'object',
     properties: {
       project_name: { type: 'string' },
       symbol_name: { type: 'string' },
       file_path: { type: 'string', description: 'Optional, for disambiguation' },
-      format: { type: 'string', enum: ['text', 'json'] },
       force_reread: {
         type: 'boolean',
         description: 'Bypass the duplicate-result check. Use ONLY when you legitimately believe the underlying data changed since a previous fetch (file edited, index re-built). Default false.',
@@ -442,7 +440,7 @@ const get_symbol_body = defineTool({
 
 const prepare_edit = defineTool({
   name: 'prepare_edit',
-  description: 'One-shot context bundle for editing a symbol: body + callers + neighbors + imports + tests. Replaces 5+ separate calls. Callers are capped by max_callers (default 10) and sorted by proximity (same file > same dir > rest). If the symbol name is ambiguous, returns candidate list — pass file_path to disambiguate. Pass format="json" for a structured response.',
+  description: 'One-shot context bundle for editing a symbol: body + callers + neighbors + imports + tests. Replaces 5+ separate calls. Callers are capped by max_callers (default 10) and sorted by proximity (same file > same dir > rest). If the symbol name is ambiguous, returns candidate list — pass file_path to disambiguate.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -450,7 +448,6 @@ const prepare_edit = defineTool({
       symbol_name: { type: 'string' },
       file_path: { type: 'string', description: 'Optional, for disambiguation when symbol_name is not unique' },
       max_callers: { type: 'number', description: 'Max callers listed (default 10)' },
-      format: { type: 'string', enum: ['text', 'json'], description: 'Response format (default text)' },
       force_reread: {
         type: 'boolean',
         description: 'Bypass the duplicate-result check. Use ONLY when you legitimately believe the underlying data changed since a previous fetch (file edited, index re-built). Default false.',
