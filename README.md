@@ -102,7 +102,7 @@ Use Copilot Chat in **Agent** mode.
 |---|---|---|
 | `MCP_SERVER_NAME` | `code-context` | Name shown to the MCP client in the handshake |
 | `MCP_OUTPUT_CAP_LEVEL` | `economic` | Output density: `economic`→`ultra` |
-| `MCP_DATA_DIR` | `~/.mcp-code-indexer` | Index DB location |
+| `MCP_DATA_DIR` | `~/.code-context` | Index DB location |
 | `MCP_MODEL_CACHE_DIR` | `~/.mcp/models` | Local ONNX model cache |
 | `MCP_EMBEDDING_MODEL` | `Xenova/multilingual-e5-small` | Local embedding model |
 | `MCP_INDEX_WORKER_URL` | — | Optional remote embeddings (Cloudflare) instead of local |

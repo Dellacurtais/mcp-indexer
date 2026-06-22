@@ -111,9 +111,14 @@ function wrap(tool: McpTool, level: ToolOutputCapLevel, projectName?: string): M
             ? args.pattern
             : undefined;
       const reduced = applySmartReducer(tool.name, text, cap, { query });
-      return reduced.length > cap
-        ? reduced.slice(0, cap) + `\n…[truncated to ${cap} chars]`
-        : reduced;
+      if (reduced.length <= cap) return reduced;
+      // Byte-slice fail-safe — but NEVER on a structured (JSON) payload: many tools
+      // return a JSON document in format="json" mode, and a mid-object cut would
+      // hand the client unparseable JSON. The smart reducer already shrinks arrays;
+      // an over-cap single JSON object is returned whole rather than corrupted.
+      const looksJson = /^\s*[[{]/.test(reduced);
+      if (looksJson) return reduced;
+      return reduced.slice(0, cap) + `\n…[truncated to ${cap} chars]`;
     },
   };
 }

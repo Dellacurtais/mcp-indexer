@@ -9,4 +9,7 @@ import { BASELINE_DDL } from './baseline.js';
  */
 export function initSchema(db: DB): void {
   db.exec(BASELINE_DDL);
+  // Stamp the collapsed-baseline version so getSchemaVersion() is meaningful
+  // (the historical migration runner is a no-op). Idempotent.
+  db.prepare("INSERT OR IGNORE INTO schema_version (version, name) VALUES (1, 'baseline')").run();
 }

@@ -68,13 +68,18 @@ export async function runEmbedBackfill(
     } catch {
       continue; // file gone since the structural pass — skip
     }
-    const symbols: CandidateSymbol[] = db.getSymbolsByFile(project.id, f.path).map((s) => ({
+    // Keep end_line so body windows match the structural extractor's real symbol
+    // span (candidate builder reads `(sym as {end_line?}).end_line`); without it
+    // body ranges fall back to a next-symbol heuristic that over-captures and
+    // churns the incremental hash.
+    const symbols = db.getSymbolsByFile(project.id, f.path).map((s) => ({
       name: s.name,
       kind: s.kind,
       signature: s.signature,
       comment: s.comment,
       line: s.line,
       parent: s.parent,
+      end_line: s.end_line,
     }));
     candidateFiles.push({
       path: f.path,
@@ -111,6 +116,19 @@ export async function runEmbedBackfill(
         type: c.metadata.type as 'file' | 'symbol' | 'symbol_body',
       })),
     );
+    // Drop windows a shrunk symbol body no longer has (it went from N to M chunks),
+    // mirroring the upstream executor — otherwise stale vectors linger in both the
+    // store and vector_ids and pollute search top-K forever (invisible to the
+    // file-deletion orphan check).
+    const superseded = chunk.flatMap((c) => c.supersededIds ?? []);
+    if (superseded.length > 0) {
+      try {
+        await vectorStore.deleteByIds(superseded, ns);
+      } catch {
+        /* best-effort: the local vector_ids rows are still removed below */
+      }
+      db.deleteVectorIdRows(project.id, superseded);
+    }
     for (const c of chunk) c.onCommit();
     embedded += chunk.length;
     batches += 1;

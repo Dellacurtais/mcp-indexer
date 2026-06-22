@@ -26,6 +26,19 @@ export interface DaemonInfo {
   root: string;
 }
 
+/**
+ * Scrub a tool error before returning it to the editor: drop absolute paths and
+ * any source-product identifiers so an exception string can't leak the origin.
+ * The full detail is logged to the daemon's stderr instead.
+ */
+function scrubError(msg: string): string {
+  return msg
+    .replace(/[A-Za-z]:[\\/][^\s"']*/g, '<path>') // Windows abs paths
+    .replace(/(?:\/[\w.@-]+){2,}/g, '<path>') // POSIX abs paths
+    .replace(/@(?:mcp|ctx)\/[\w/-]+/gi, '<module>')
+    .replace(/mcp-code-indexer|codestudio/gi, 'code-context');
+}
+
 function readJsonBody(req: http.IncomingMessage): Promise<Record<string, unknown>> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
@@ -82,7 +95,9 @@ export function startDaemonHttp(
             const out = await tool.handler(args, ctx);
             return send(200, { content: typeof out === 'string' ? out : String(out) });
           } catch (e) {
-            return send(200, { error: e instanceof Error ? e.message : String(e), isError: true });
+            const detail = e instanceof Error ? e.message : String(e);
+            console.error(`[code-context] tool "${name}" error: ${detail}`);
+            return send(200, { error: scrubError(detail), isError: true });
           }
         }
         send(404, { error: 'not found' });
@@ -99,7 +114,11 @@ export function startDaemonHttp(
       const port = typeof addr === 'object' && addr ? addr.port : 0;
       resolve({
         port,
-        close: () => new Promise<void>((r) => server.close(() => r())),
+        close: () =>
+          new Promise<void>((r) => {
+            server.closeAllConnections?.(); // don't wait on idle keep-alive sockets
+            server.close(() => r());
+          }),
       });
     });
   });

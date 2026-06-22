@@ -24,4 +24,4 @@ function resolveVersion(): string {
 }
 
 export const VERSION = resolveVersion();
-export const PACKAGE_NAME = 'mcp-code-indexer';
+export const PACKAGE_NAME = 'code-context';

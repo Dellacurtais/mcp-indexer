@@ -34,7 +34,7 @@ const META_KEYS = ['project_name', 'type', 'ref_id'] as const;
  * Default on-disk location for the vectors DB when the admin config doesn't
  * pin a `path`. Co-locates beside the main index DB (MCP_INDEX_DB) so a
  * project's data and its vectors live together; falls back to the user's
- * ~/.mcp-code-indexer dir.
+ * ~/.code-context dir.
  */
 export function defaultSqliteVecPath(): string {
   const indexDb = process.env.MCP_INDEX_DB;
@@ -44,7 +44,7 @@ export function defaultSqliteVecPath(): string {
     return `${dir}/vectors-sqlite-vec.db`;
   }
   const home = process.env.HOME ?? process.env.USERPROFILE ?? '.';
-  return `${home}/.mcp-code-indexer/vectors-sqlite-vec.db`;
+  return `${home}/.code-context/vectors-sqlite-vec.db`;
 }
 
 export class SqliteVecVectorStore implements VectorStore {

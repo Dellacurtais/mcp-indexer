@@ -25,7 +25,7 @@ import { shapeRegistry } from '../../mcp/shaping.js';
 import { startDaemonHttp } from '../../mcp/daemon-server.js';
 import { runStdioShim } from '../../mcp/shim.js';
 import type { ToolContext } from '../../mcp/context.js';
-import { ensureDaemon, writeLock, removeLock } from '../daemon-registry.js';
+import { ensureDaemon, writeLock, removeLock, liveDaemon } from '../daemon-registry.js';
 
 const VERSION = '0.1.0';
 
@@ -81,27 +81,23 @@ async function runDaemon(root: string, opts: ContextCommandOpts): Promise<void> 
     createReranker(providerStore),
   );
   const ctx: ToolContext = { config, db, providerStore, embeddingService, vectorStore, hybridSearch };
-
   const embeddingsOn = !opts.noEmbeddings;
 
-  log(`indexing ${project.name} (${root}) …`);
-  const res = await runStructuralIndex(db, project.id, {});
-  log(`indexed ${res.indexed}/${res.totalFiles} files (${res.errorCount} errors, ${res.durationMs}ms)`);
+  // Defense-in-depth against a double cold-start (ensureDaemon's spawn lock is
+  // the primary guard): if a healthy daemon already owns this root, don't serve
+  // a second one — just exit and let the existing one keep serving.
+  const already = await liveDaemon(root);
+  if (already) {
+    log(`a daemon is already serving ${project.name} on ${already.baseUrl} — exiting`);
+    db.close();
+    return;
+  }
 
-  const embed = async (eager: boolean): Promise<void> => {
-    if (!embeddingsOn) return;
-    try {
-      if (eager) log('embedding (first run downloads the local ONNX model ~100MB) …');
-      const eb = await runEmbedBackfill(db, project, root, embeddingService, vectorStore);
-      if (eb.candidates > 0) log(`embedded ${eb.embedded}/${eb.candidates} candidates (${eb.batches} batches)`);
-    } catch (e) {
-      log(`embedding skipped: ${e instanceof Error ? e.message : String(e)}`);
-    }
-  };
-  // Serve immediately after the (fast) structural pass so the editor's shim
-  // becomes healthy right away — FTS/structural search works at once. The
-  // embeddings backfill (which may download the ONNX model on first run) then
-  // runs in the background and upgrades search to semantic/hybrid as vectors land.
+  // SERVE FIRST: open the HTTP server + write the lockfile BEFORE indexing, so the
+  // shim becomes healthy immediately even on a large repo (the structural pass can
+  // take a while). Search returns progressively richer results as indexing fills
+  // the DB in the background; embeddings (which may download the ONNX model on
+  // first run) upgrade it to semantic/hybrid afterwards.
   const registry = shapeRegistry(buildToolRegistry(), { projectName: project.name });
   const daemon = await startDaemonHttp(registry, ctx, {
     serverName: serverName(),
@@ -116,9 +112,30 @@ async function runDaemon(root: string, opts: ContextCommandOpts): Promise<void> 
     startedAt: new Date().toISOString(),
     serverName: serverName(),
   });
-  log(`daemon on http://127.0.0.1:${daemon.port} — ${registry.size} tools, watching for changes`);
+  log(`daemon on http://127.0.0.1:${daemon.port} — ${registry.size} tools (indexing in background)`);
 
-  void embed(true); // background; does not block serving
+  const embed = async (eager: boolean): Promise<void> => {
+    if (!embeddingsOn) return;
+    try {
+      if (eager) log('embedding (first run downloads the local ONNX model ~100MB) …');
+      const eb = await runEmbedBackfill(db, project, root, embeddingService, vectorStore);
+      if (eb.candidates > 0) log(`embedded ${eb.embedded}/${eb.candidates} candidates (${eb.batches} batches)`);
+    } catch (e) {
+      log(`embedding skipped: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  };
+
+  // Initial index runs in the background so it never blocks serving.
+  void (async () => {
+    try {
+      log(`indexing ${project.name} (${root}) …`);
+      const res = await runStructuralIndex(db, project.id, {});
+      log(`indexed ${res.indexed}/${res.totalFiles} files (${res.errorCount} errors, ${res.durationMs}ms)`);
+      await embed(true);
+    } catch (e) {
+      log(`initial index error: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  })();
 
   const watcher = new FileWatcherService();
   watcher.startWatching(
@@ -138,9 +155,15 @@ async function runDaemon(root: string, opts: ContextCommandOpts): Promise<void> 
 
   let shuttingDown = false;
   const shutdown = async (): Promise<void> => {
-    if (shuttingDown) return;
+    if (shuttingDown) {
+      // second signal = force exit (escape hatch if a step is wedged)
+      process.exit(1);
+    }
     shuttingDown = true;
     log('shutting down …');
+    // Watchdog: never let a stuck close() (e.g. a keep-alive socket) hang forever.
+    const watchdog = setTimeout(() => process.exit(1), 5000);
+    watchdog.unref();
     try {
       await watcher.stopAll();
     } catch {
@@ -162,6 +185,7 @@ async function runDaemon(root: string, opts: ContextCommandOpts): Promise<void> 
     } catch {
       /* ignore */
     }
+    clearTimeout(watchdog);
     process.exit(0);
   };
   process.on('SIGINT', shutdown);

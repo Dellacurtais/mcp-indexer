@@ -404,8 +404,11 @@ export class CodeIndexDB {
     return project;
   }
   getProject(id: number): Project | undefined {
-    const project = projects.get(this.db, id);
-    return project ? this.overlayRuntimeConfig(project, id) : project;
+    // The central `projects` row already carries node_version/runner_shell/
+    // runtime_versions; the upstream per-project `project_runtime_config` overlay
+    // table is not in the baseline, so we skip it (avoids a guaranteed-failing
+    // "no such table" query on a hot path).
+    return projects.get(this.db, id);
   }
   getProjectByName(name: string): Project | undefined { return projects.getByName(this.db, name); }
   getProjectByPath(rootPath: string): Project | undefined { return projects.getByPath(this.db, rootPath); }

@@ -69,12 +69,12 @@ export interface IndexerConfig {
 /**
  * Canonical MCP data directory — holds `index.db`, `exports/`, and
  * host-scaffolded projects (`projects/`). Single source of truth so the
- * various features stop re-joining `~/.mcp-code-indexer` independently.
+ * various features stop re-joining `~/.code-context` independently.
  * Overridable with `MCP_DATA_DIR`.
  */
 export function mcpDataDir(env: NodeJS.ProcessEnv = process.env): string {
   const override = env.MCP_DATA_DIR?.trim();
-  return override ? resolve(override) : join(homedir(), '.mcp-code-indexer');
+  return override ? resolve(override) : join(homedir(), '.code-context');
 }
 
 const DEFAULT_DATA_DIR = mcpDataDir();
@@ -271,15 +271,6 @@ export function ensureDataDir(): string {
 
 export function loadConfig(cliOverrides?: Partial<IndexerConfig>): IndexerConfig {
   const config: IndexerConfig = structuredClone(DEFAULT_CONFIG);
-
-  // Deprecation warning — .mcp-indexer.json is no longer read.
-  const legacyPath = join(process.cwd(), '.mcp-indexer.json');
-  if (existsSync(legacyPath)) {
-    console.warn(
-      '[deprecation] .mcp-indexer.json is no longer read. ' +
-      'Settings are managed via the admin dashboard. You can safely delete this file.'
-    );
-  }
 
   applyEnvOverrides(config);
 
