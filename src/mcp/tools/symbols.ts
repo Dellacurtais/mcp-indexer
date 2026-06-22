@@ -162,7 +162,6 @@ const find_references = defineTool({
                 file_path: c.file_path,
                 line: c.line,
                 kind: c.kind,
-                stable_id: c.stable_id,
               }))
             : undefined,
           total: refs.length,
@@ -389,7 +388,6 @@ const get_symbol_body = defineTool({
             file_path: c.file_path,
             line: c.line,
             kind: c.kind,
-            stable_id: c.stable_id,
           })),
         });
       }
@@ -428,7 +426,6 @@ const get_symbol_body = defineTool({
           start_line: result.start_line,
           end_line: result.end_line,
           body: result.body,
-          stable_id: sym?.stable_id ?? null,
           used_fallback: usedFallback,
         });
       }
@@ -497,7 +494,7 @@ const prepare_edit = defineTool({
           : located.fileSymbols.slice(0, 6);
         if (asJson) {
           return JSON.stringify({
-            symbol: { name: symbolName, kind: '?', signature: null, file_path: located.file, line: located.line, stable_id: null },
+            symbol: { name: symbolName, kind: '?', signature: null, file_path: located.file, line: located.line },
             source: 'disk_fallback',
             body: located.body ? { file: located.file, ...located.body } : null,
             callers: {
@@ -542,7 +539,6 @@ const prepare_edit = defineTool({
               line: c.line,
               kind: c.kind,
               signature: c.signature,
-              stable_id: c.stable_id,
             })),
           });
         }
@@ -559,7 +555,6 @@ const prepare_edit = defineTool({
     }
 
     const sections: string[] = [`=== prepare_edit: ${symbolName} ===`];
-    if (sym.stable_id) sections.push(`stable_id: ${sym.stable_id}`);
 
     if (sym.line) {
       try {
@@ -629,7 +624,6 @@ const prepare_edit = defineTool({
           signature: sym.signature,
           file_path: sym.file_path,
           line: sym.line,
-          stable_id: sym.stable_id,
         },
         body,
         callers: {

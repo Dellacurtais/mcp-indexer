@@ -218,7 +218,7 @@ const get_file_skeleton = defineTool({
       const extX = filePath.split('.').pop() ?? '';
       if (asJsonX) {
         return JSON.stringify({
-          file: { path: filePath, ext: extX, layer: 'unknown', line_count: fallback.lineCount, complexity: 'unknown', summary: null, concepts: [] },
+          file: { path: filePath, line_count: fallback.lineCount },
           total_symbols: totalX,
           shown_symbols: shownX.length,
           truncated: truncatedX,
@@ -265,34 +265,33 @@ const get_file_skeleton = defineTool({
     }
 
     if (asJson) {
+      // Lean payload: drop the internal stable_id and any empty/"unknown" file
+      // metadata — they cost tokens and carry no signal for the agent.
+      const fileMeta: Record<string, unknown> = { path: filePath, line_count: file.line_count };
+      if (file.layer && file.layer !== 'unknown') fileMeta.layer = file.layer;
+      if (file.complexity && file.complexity !== 'unknown') fileMeta.complexity = file.complexity;
+      if (file.summary) fileMeta.summary = file.summary;
+      if (concepts.length) fileMeta.concepts = concepts.slice(0, 8);
       return JSON.stringify({
-        file: {
-          path: filePath,
-          ext,
-          layer: file.layer,
-          line_count: file.line_count,
-          complexity: file.complexity,
-          summary: file.summary || null,
-          concepts: concepts.slice(0, 8),
-        },
+        file: fileMeta,
         total_symbols: totalSymbols,
-        shown_symbols: shownSymbols.length + extras.length,
-        truncated,
+        ...(truncated ? { shown_symbols: shownSymbols.length + extras.length, truncated: true } : {}),
         symbols: [
-          ...shownSymbols.map(s => ({
-            line: s.line,
-            kind: s.kind,
-            parent: s.parent,
-            name: s.name,
-            signature: s.signature,
-            stable_id: s.stable_id,
-          })),
+          ...shownSymbols.map((s) => {
+            const o: Record<string, unknown> = { line: s.line, kind: s.kind, name: s.name, signature: s.signature };
+            if (s.parent) o.parent = s.parent;
+            return o;
+          }),
           ...extras,
         ],
       });
     }
 
-    const header = `${filePath} | ${ext} | ${file.layer} | ${file.line_count}L | ${file.complexity}`;
+    const metaBits = [
+      file.layer && file.layer !== 'unknown' ? `layer=${file.layer}` : '',
+      file.complexity && file.complexity !== 'unknown' ? `complexity=${file.complexity}` : '',
+    ].filter(Boolean);
+    const header = `${filePath} | ${ext} | ${file.line_count}L${metaBits.length ? ` | ${metaBits.join(' | ')}` : ''}`;
     const summary = file.summary ? `summary: ${file.summary}` : '';
     const cline = concepts.length ? `concepts: ${concepts.slice(0, 8).join(', ')}` : '';
     const truncateNote = truncated
@@ -301,7 +300,8 @@ const get_file_skeleton = defineTool({
     const symLines = shownSymbols.map(s => {
       const parent = s.parent ? `${s.parent}.` : '';
       const sig = s.signature || (s.parameters ? `(${s.parameters})` : '');
-      return `${String(s.line ?? '?').padStart(5)} ${s.kind} ${parent}${s.name}${sig && sig !== s.name ? ` ${sig}` : ''}`;
+      const showSig = sig && sig !== s.name && sig !== `${s.kind} ${s.name}`;
+      return `${String(s.line ?? '?').padStart(5)} ${s.kind} ${parent}${s.name}${showSig ? ` ${sig}` : ''}`;
     });
     let fallbackNote = '';
     if (extras.length > 0) {
