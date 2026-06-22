@@ -56,6 +56,30 @@ On the first `index` with embeddings enabled, the local model (~100 MB,
 `Xenova/multilingual-e5-small`) downloads once to `~/.mcp/models`. After that it is fully offline.
 `serve` requires an **explicit, real project path** (it refuses your home dir or a drive root).
 
+## Use it from the terminal (global CLI)
+
+Install `code-context` on your PATH as a symlink to your build (so `pnpm build` updates it —
+no reinstall):
+
+```bash
+cd /abs/path/to/code-context && npm link     # → `code-context` available everywhere
+# update after code changes:  pnpm build      (the linked command points at dist/)
+# uninstall:                  npm unlink -g code-context
+```
+
+Then:
+
+```bash
+code-context index   <repo>             # build/refresh the index  (--watch, --no-embeddings)
+code-context status  [repo]             # files / symbols / vector coverage  (default: cwd)
+code-context search  "<query>" [repo]   # query the index  (--mode auto|fts|vector|hybrid, --type, --limit)
+code-context projects                   # list every indexed project
+code-context serve   [repo]             # the MCP server for an editor
+```
+
+All projects share one index at `~/.code-context/index.db` (override with `MCP_DATA_DIR`).
+`status` is the quickest way to watch an embeddings backfill complete (coverage → 100%).
+
 ## Editor setup (Copilot **Agent mode** required)
 
 `serve` auto-detects the open project from the editor's **MCP workspace roots** — so you usually
