@@ -5,7 +5,7 @@
 import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs';
-import { loadConfig } from '@ctx/shared/utils/config.js';
+import { loadConfig, type IndexerConfig } from '@ctx/shared/utils/config.js';
 import { CodeIndexDB } from '@ctx/store/db.js';
 import {
   createAndSeedProviderStore,
@@ -50,6 +50,12 @@ export function resolveRoot(rootArg: string): string {
   if (!fs.existsSync(root)) throw new Error(`path does not exist: ${root}`);
   if (!fs.statSync(root).isDirectory()) throw new Error(`not a directory: ${root}`);
   return root;
+}
+
+/** Open just the index DB (no seed / no search bundle) — for read-only status/list. */
+export function openDb(): { config: IndexerConfig; db: CodeIndexDB } {
+  const config = loadConfig();
+  return { config, db: new CodeIndexDB(config.dbPath) };
 }
 
 export interface OpenedProject {
