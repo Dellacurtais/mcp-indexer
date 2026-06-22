@@ -10,6 +10,7 @@ import {
 } from '@ctx/services/services/code-reader.js';
 import { treeSitterSymbols } from '@ctx/indexer/indexer/incremental.js';
 import { normalizeFilePath, withProject, formatOutput } from './_helpers.js';
+import { inferFileRole, renderSymbolTree, joinCapped, type OutlineSymbol } from './_render.js';
 
 /**
  * Tree-sitter-driven skeleton fallback. Used when the symbol DB has no row
@@ -171,7 +172,7 @@ const get_file_structure = defineTool({
 
 const get_file_skeleton = defineTool({
   name: 'get_file_skeleton',
-  description: 'Compact outline of a file: header + symbol list (line, kind, name, signature). Token-cheap alternative to get_file_structure. Symbol count is capped by max_symbols (default 100). Pass format="json" for a structured response.',
+  description: 'Markdown digest of a file: header + role + imports + exports + a nested symbol outline. Token-cheap; prefer this over reading whole files. Capped by max_symbols (default 100).',
   inputSchema: {
     type: 'object',
     properties: {
@@ -180,22 +181,27 @@ const get_file_skeleton = defineTool({
       kind: { type: 'string', description: 'Filter by symbol kind' },
       filter: { type: 'string', description: 'Regex on symbol name' },
       max_symbols: { type: 'number', description: 'Max symbols listed (default 100)' },
-      format: { type: 'string', enum: ['text', 'json'] },
-      force_reread: {
-        type: 'boolean',
-        description:
-          'Bypass the duplicate-result marker. Set true if you believe the file changed since a previous call. Default false.',
-      },
     },
     required: ['project_name', 'file_path'],
   },
   handler: withProject(async (args, { db }, project) => {
     const filePath = normalizeFilePath(args.file_path as string, project.root_path);
+    const kindFilter = args.kind as string | undefined;
+    const nameFilter = args.filter as string | undefined;
+    const maxSymbols = (args.max_symbols as number) ?? 100;
+    const applyFilters = <T extends { kind: string; name: string }>(syms: T[]): T[] => {
+      let out = syms;
+      if (kindFilter) out = out.filter((s) => s.kind === kindFilter);
+      if (nameFilter) {
+        try { const re = new RegExp(nameFilter); out = out.filter((s) => re.test(s.name)); } catch { /* ignore */ }
+      }
+      return out;
+    };
+
     const file = db.getFile(project.id, filePath);
     if (!file) {
-      // Tree-sitter fallback: parse the file off disk so the agent gets a
-      // useful skeleton even when the project has never been indexed (or
-      // the file is brand-new and not in `files` yet).
+      // Tree-sitter fallback: parse off disk so the agent gets a digest even
+      // when the project isn't indexed yet.
       const fallback = await diskSkeletonFallback(project.root_path, filePath);
       if (!fallback) {
         throw new Error(
@@ -203,114 +209,52 @@ const get_file_skeleton = defineTool({
           `Use list_directory or search to find the correct path. Do not retry with the same file_path.`,
         );
       }
-      const kindFilterX = args.kind as string | undefined;
-      const nameFilterX = args.filter as string | undefined;
-      const maxX = (args.max_symbols as number) ?? 100;
-      const asJsonX = args.format === 'json';
-      let syms = fallback.symbols;
-      if (kindFilterX) syms = syms.filter((s) => s.kind === kindFilterX);
-      if (nameFilterX) {
-        try { const re = new RegExp(nameFilterX); syms = syms.filter((s) => re.test(s.name)); } catch { /* ignore */ }
-      }
-      const totalX = syms.length;
-      const truncatedX = totalX > maxX;
-      const shownX = truncatedX ? syms.slice(0, maxX) : syms;
-      const extX = filePath.split('.').pop() ?? '';
-      if (asJsonX) {
-        return JSON.stringify({
-          file: { path: filePath, line_count: fallback.lineCount },
-          total_symbols: totalX,
-          shown_symbols: shownX.length,
-          truncated: truncatedX,
-          source: 'tree-sitter-fallback',
-          symbols: shownX.map((s) => ({ line: s.line, kind: s.kind, parent: s.parent, name: s.name, signature: s.signature })),
-        });
-      }
-      const headerX = `${filePath} | ${extX} | ${fallback.lineCount}L | tree-sitter fallback (project not indexed)`;
-      const truncNoteX = truncatedX ? `[truncated: showing ${shownX.length}/${totalX} symbols]` : '';
-      const symLinesX = shownX.map((s) => {
-        const parent = s.parent ? `${s.parent}.` : '';
-        return `${String(s.line ?? '?').padStart(5)} ${s.kind} ${parent}${s.name}${s.signature && s.signature !== s.name ? ` ${s.signature}` : ''}`;
-      });
-      return [headerX, truncNoteX, '', ...symLinesX].filter(Boolean).join('\n');
+      const syms = applyFilters(fallback.symbols);
+      const ext = filePath.split('.').pop() ?? '';
+      const lines = [`# ${filePath} · ${fallback.lineCount} lines · ${ext}  (not indexed — tree-sitter)`];
+      const role = inferFileRole(filePath);
+      if (role) lines.push(`Role: ${role}`);
+      lines.push('', '## Symbols');
+      if (syms.length > maxSymbols) lines.push(`(showing ${maxSymbols}/${syms.length} — refine with kind/filter/max_symbols)`);
+      lines.push(renderSymbolTree(syms as OutlineSymbol[], maxSymbols) || '(no symbols)');
+      return lines.join('\n');
     }
-    let symbols = db.getSymbolsByFile(project.id, filePath);
-    const kindFilter = args.kind as string | undefined;
-    const nameFilter = args.filter as string | undefined;
-    const maxSymbols = (args.max_symbols as number) ?? 100;
-    const asJson = args.format === 'json';
-    if (kindFilter) symbols = symbols.filter(s => s.kind === kindFilter);
-    if (nameFilter) {
-      try { const re = new RegExp(nameFilter); symbols = symbols.filter(s => re.test(s.name)); } catch { /* ignore */ }
-    }
-    const ext = filePath.split('.').pop() ?? '';
-    const concepts = JSON.parse(file.concepts || '[]') as string[];
 
-    const totalSymbols = symbols.length;
-    const truncated = totalSymbols > maxSymbols;
-    const shownSymbols = truncated ? symbols.slice(0, maxSymbols) : symbols;
+    const symbols = applyFilters(db.getSymbolsByFile(project.id, filePath));
 
-    interface ExtraEntry { line: number | null; kind: string; name: string; signature: string; from_fallback: true }
-    const extras: ExtraEntry[] = [];
+    // Regex fallback for files the structural pass under-extracted.
+    const extras: OutlineSymbol[] = [];
     if (symbols.length < 3 && file.line_count > 80 && !kindFilter && !nameFilter) {
       try {
-        const extracted = extractSkeletonFromFile(join(project.root_path, filePath));
-        const known = new Set(symbols.map(s => `${s.line}:${s.name}`));
-        for (const e of extracted) {
+        const known = new Set(symbols.map((s) => `${s.line}:${s.name}`));
+        for (const e of extractSkeletonFromFile(join(project.root_path, filePath))) {
           if (known.has(`${e.line}:${e.name}`)) continue;
-          if (extras.length + shownSymbols.length >= maxSymbols) break;
-          extras.push({ line: e.line, kind: e.kind, name: e.name, signature: e.signature.slice(0, 100), from_fallback: true });
+          extras.push({ line: e.line, kind: e.kind, name: e.name });
         }
       } catch { /* ignore */ }
     }
 
-    if (asJson) {
-      // Lean payload: drop the internal stable_id and any empty/"unknown" file
-      // metadata — they cost tokens and carry no signal for the agent.
-      const fileMeta: Record<string, unknown> = { path: filePath, line_count: file.line_count };
-      if (file.layer && file.layer !== 'unknown') fileMeta.layer = file.layer;
-      if (file.complexity && file.complexity !== 'unknown') fileMeta.complexity = file.complexity;
-      if (file.summary) fileMeta.summary = file.summary;
-      if (concepts.length) fileMeta.concepts = concepts.slice(0, 8);
-      return JSON.stringify({
-        file: fileMeta,
-        total_symbols: totalSymbols,
-        ...(truncated ? { shown_symbols: shownSymbols.length + extras.length, truncated: true } : {}),
-        symbols: [
-          ...shownSymbols.map((s) => {
-            const o: Record<string, unknown> = { line: s.line, kind: s.kind, name: s.name, signature: s.signature };
-            if (s.parent) o.parent = s.parent;
-            return o;
-          }),
-          ...extras,
-        ],
-      });
+    const all: OutlineSymbol[] = [
+      ...symbols.map((s) => ({ name: s.name, kind: s.kind, line: s.line, parent: s.parent })),
+      ...extras,
+    ];
+
+    const lines = [`# ${filePath} · ${file.line_count} lines · ${file.language}`];
+    const role = inferFileRole(filePath);
+    if (role) lines.push(`Role: ${role}`);
+
+    const imports = joinCapped(db.getDependencies(file.id, project.id).map((d) => d.import_path));
+    const exports = joinCapped(symbols.filter((s) => s.exported && !s.parent).map((s) => s.name));
+    if (imports || exports) {
+      lines.push('');
+      if (imports) lines.push(`Imports: ${imports}`);
+      if (exports) lines.push(`Exports: ${exports}`);
     }
 
-    const metaBits = [
-      file.layer && file.layer !== 'unknown' ? `layer=${file.layer}` : '',
-      file.complexity && file.complexity !== 'unknown' ? `complexity=${file.complexity}` : '',
-    ].filter(Boolean);
-    const header = `${filePath} | ${ext} | ${file.line_count}L${metaBits.length ? ` | ${metaBits.join(' | ')}` : ''}`;
-    const summary = file.summary ? `summary: ${file.summary}` : '';
-    const cline = concepts.length ? `concepts: ${concepts.slice(0, 8).join(', ')}` : '';
-    const truncateNote = truncated
-      ? `[truncated: showing ${shownSymbols.length}/${totalSymbols} symbols — use max_symbols or kind/filter to refine]`
-      : '';
-    const symLines = shownSymbols.map(s => {
-      const parent = s.parent ? `${s.parent}.` : '';
-      const sig = s.signature || (s.parameters ? `(${s.parameters})` : '');
-      const showSig = sig && sig !== s.name && sig !== `${s.kind} ${s.name}`;
-      return `${String(s.line ?? '?').padStart(5)} ${s.kind} ${parent}${s.name}${showSig ? ` ${sig}` : ''}`;
-    });
-    let fallbackNote = '';
-    if (extras.length > 0) {
-      fallbackNote = `\n[regex fallback -- DB had ${symbols.length} symbols]`;
-      for (const e of extras) {
-        symLines.push(`${String(e.line ?? '?').padStart(5)} ${e.kind} ${e.name} ${e.signature}`);
-      }
-    }
-    return [header, summary, cline, truncateNote, fallbackNote, '', ...symLines].filter(Boolean).join('\n');
+    lines.push('', '## Symbols');
+    if (all.length > maxSymbols) lines.push(`(showing ${maxSymbols}/${all.length} — refine with kind/filter/max_symbols)`);
+    lines.push(renderSymbolTree(all, maxSymbols) || '(no symbols)');
+    return lines.join('\n');
   }),
 });
 
