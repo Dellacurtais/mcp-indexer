@@ -29,6 +29,7 @@
     "zod": "^3.24.2"
   },
   "optionalDependencies": {
+    "@aws-sdk/client-bedrock-agent-runtime": "^3.1029.0",
     "@aws-sdk/client-bedrock-runtime": "^3.1029.0",
     "tslib": "^2.6.2"
   },

@@ -197,6 +197,25 @@ it. To skip it entirely: `pnpm install --no-optional`.
 
 ---
 
+## Optional: Bedrock reranker
+
+After the FTS + vector merge, search re-ranks the top candidates with a cross-encoder. The default
+is a **local ONNX** model (offline, fast, free). You can swap in a **Bedrock rerank model**
+(`amazon.rerank-v1:0`, `cohere.rerank-v3-5:0`) for higher precision:
+
+```dotenv
+# in your shell or ~/.code-context/.env  (reuses the AWS_* creds)
+CODE_CONTEXT_RERANK=bedrock
+CODE_CONTEXT_RERANK_MODEL=amazon.rerank-v1:0     # optional; or cohere.rerank-v3-5:0 / a full ARN
+```
+
+> **Trade-off:** the reranker runs on **every search**, so a network backend adds latency and a
+> **per-query Bedrock cost** to each query. Prefer the local reranker unless you specifically want
+> the extra precision. If a Bedrock call fails (no creds, throttle), search falls back to the RRF
+> order — it never breaks. Uses `@aws-sdk/client-bedrock-agent-runtime` (also an optional dep).
+
+---
+
 ## Configuration & `.env`
 
 Instead of exporting variables, drop them in a `.env` file. Two locations are loaded, in this
@@ -237,6 +256,8 @@ server too — no credentials in the editor launcher config.
 | `CODE_CONTEXT_ANALYSIS` | — | `bedrock` or `mock` — enables the `enrich` provider |
 | `CODE_CONTEXT_ANALYSIS_MODEL` | `amazon.titan-text-express-v1` | Bedrock model id |
 | `CODE_CONTEXT_ANALYSIS_INFERENCE` | — | `1` → prepend the region inference-profile prefix |
+| `CODE_CONTEXT_RERANK` | — | `bedrock` → use a Bedrock rerank model instead of the local ONNX one |
+| `CODE_CONTEXT_RERANK_MODEL` | `amazon.rerank-v1:0` | Bedrock rerank model id (or `cohere.rerank-v3-5:0` / a full ARN) |
 | `AWS_REGION` / `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_SESSION_TOKEN` | — | Bedrock credentials (or use `~/.aws`, SSO, instance role) |
 | `MCP_INDEX_WORKER_URL` | — | Optional remote embeddings (Cloudflare) instead of local |
 | `QDRANT_URL` / `PINECONE_HOST`+`PINECONE_API_KEY` | — | Optional remote vector store |

@@ -201,6 +201,25 @@ nunca o tocam. Para pular de vez: `pnpm install --no-optional`.
 
 ---
 
+## Opcional: reranker do Bedrock
+
+Depois do merge FTS + vetor, a busca re-rankeia os melhores candidatos com um cross-encoder. O
+padrão é um modelo **ONNX local** (offline, rápido, grátis). Você pode trocar por um **modelo de
+rerank do Bedrock** (`amazon.rerank-v1:0`, `cohere.rerank-v3-5:0`) para mais precisão:
+
+```dotenv
+# no seu shell ou em ~/.code-context/.env  (reaproveita as creds AWS_*)
+CODE_CONTEXT_RERANK=bedrock
+CODE_CONTEXT_RERANK_MODEL=amazon.rerank-v1:0     # opcional; ou cohere.rerank-v3-5:0 / um ARN completo
+```
+
+> **Tradeoff:** o reranker roda **a cada busca**, então um backend de rede adiciona latência e um
+> **custo por query** do Bedrock em toda consulta. Prefira o reranker local a menos que você queira
+> mesmo a precisão extra. Se uma chamada do Bedrock falhar (sem creds, throttle), a busca cai na
+> ordem RRF — nunca quebra. Usa `@aws-sdk/client-bedrock-agent-runtime` (também dep opcional).
+
+---
+
 ## Configuração e `.env`
 
 Em vez de exportar variáveis, coloque-as num arquivo `.env`. Dois locais são carregados, nesta
@@ -241,6 +260,8 @@ do editor — sem credenciais na config do launcher.
 | `CODE_CONTEXT_ANALYSIS` | — | `bedrock` ou `mock` — habilita o provider do `enrich` |
 | `CODE_CONTEXT_ANALYSIS_MODEL` | `amazon.titan-text-express-v1` | Id do modelo Bedrock |
 | `CODE_CONTEXT_ANALYSIS_INFERENCE` | — | `1` → prefixa o inference-profile da região |
+| `CODE_CONTEXT_RERANK` | — | `bedrock` → usa um modelo de rerank do Bedrock em vez do ONNX local |
+| `CODE_CONTEXT_RERANK_MODEL` | `amazon.rerank-v1:0` | Id do modelo de rerank do Bedrock (ou `cohere.rerank-v3-5:0` / um ARN) |
 | `AWS_REGION` / `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_SESSION_TOKEN` | — | Credenciais Bedrock (ou use `~/.aws`, SSO, role da instância) |
 | `MCP_INDEX_WORKER_URL` | — | Embeddings remotos opcionais (Cloudflare) em vez de locais |
 | `QDRANT_URL` / `PINECONE_HOST`+`PINECONE_API_KEY` | — | Vector store remoto opcional |

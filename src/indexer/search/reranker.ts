@@ -13,6 +13,7 @@
  */
 
 import { LocalReranker } from './local-reranker.js';
+import { BedrockReranker } from './bedrock-reranker.js';
 import type { RerankCandidate, RerankResult, RerankerService } from './reranker-types.js';
 
 // Re-export the contract types so existing importers (`@ctx/indexer/search/reranker.js`)
@@ -175,6 +176,15 @@ export function createReranker(store?: RerankerConfigSource | null): RerankerSer
       const c = cfg.config as { workerUrl?: string; workerToken?: string };
       if (c.workerUrl) return new CloudflareReranker({ workerUrl: c.workerUrl, workerToken: c.workerToken });
     }
+    if (cfg.kind === 'bedrock') {
+      const c = cfg.config as { model?: string; region?: string };
+      return new BedrockReranker({ model: c.model, region: c.region });
+    }
+  }
+
+  // Explicit opt-in wins over a stray COHERE_API_KEY / worker URL in the env.
+  if ((process.env.CODE_CONTEXT_RERANK ?? '').toLowerCase() === 'bedrock') {
+    return new BedrockReranker({ model: process.env.CODE_CONTEXT_RERANK_MODEL });
   }
 
   const cohereKey = process.env.COHERE_API_KEY;
