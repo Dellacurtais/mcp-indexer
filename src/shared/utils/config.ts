@@ -1,7 +1,21 @@
-import 'dotenv/config';
+import { config as loadDotenv } from 'dotenv';
 import { existsSync, mkdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { homedir } from 'node:os';
+
+// Env precedence: real shell env > ./.env (cwd) > ~/.code-context/.env (global).
+// dotenv never overrides an already-set key, so earlier loads win. The global
+// file is the stable home for credentials (AWS, API keys) since the CLI is run
+// from anywhere — e.g. drop CODE_CONTEXT_ANALYSIS + AWS_* there once.
+// `quiet` is essential: in `serve` mode stdout is the MCP channel, so dotenv's
+// v17 "injected env" tips must never be printed there.
+loadDotenv({ quiet: true });
+{
+  const dir = process.env.MCP_DATA_DIR?.trim()
+    ? resolve(process.env.MCP_DATA_DIR.trim())
+    : join(homedir(), '.code-context');
+  loadDotenv({ path: join(dir, '.env'), quiet: true });
+}
 
 export interface McpHttpConfig {
   enabled: boolean;

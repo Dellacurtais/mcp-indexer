@@ -102,6 +102,11 @@ code-context enrich <repo> --limit 100 --budget 0.50
 > `pnpm install` pulls it by default, but it's loaded lazily, so `index`/`serve`/`search`
 > never touch it. To skip it entirely, install with `pnpm install --no-optional`.
 
+> **Config via `.env`:** instead of exporting vars, drop them in a `.env` file — either in
+> the directory you run the CLI from, or globally in **`~/.code-context/.env`** (loaded no
+> matter where you run `code-context`, so the best home for AWS creds). Precedence is
+> `shell env > ./.env > ~/.code-context/.env`. See [`.env.example`](.env.example).
+
 - **Targets only stale, high-in-degree files** (`semantic_hash` gate) — a re-run after edits
   re-touches just the changed files. `--limit` caps how many you pay for; `--budget <usd>`
   hard-stops on spend (default `$MCP_INDEX_BUDGET` or `$1.00`).
