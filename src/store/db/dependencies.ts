@@ -52,6 +52,23 @@ export function getDependents(db: DB, projectId: number, fileId: number): DBFile
   `).all(fileId, projectId) as DBFileDependent[];
 }
 
+/** Most depended-on files (in-degree) — single GROUP BY over the dep graph. */
+export function getTopHubs(
+  db: DB,
+  projectId: number,
+  limit: number,
+): Array<{ path: string; dependents: number }> {
+  return db.prepare(`
+    SELECT f.path as path, COUNT(*) as dependents
+    FROM file_dependencies fd
+    JOIN files f ON f.id = fd.target_file_id
+    WHERE fd.project_id = ? AND fd.target_file_id IS NOT NULL
+    GROUP BY fd.target_file_id
+    ORDER BY dependents DESC, f.path ASC
+    LIMIT ?
+  `).all(projectId, limit) as Array<{ path: string; dependents: number }>;
+}
+
 export function getCircular(db: DB, projectId: number): Array<{ path_a: string; path_b: string }> {
   return db.prepare(`
     SELECT DISTINCT f1.path as path_a, f2.path as path_b

@@ -2,6 +2,7 @@ import { defineTool, type McpTool } from '../tool.js';
 import { truncateToTokens } from '../utils.js';
 import { buildRepoMap } from '@ctx/services/services/repo-map.js';
 import { withProject } from './_helpers.js';
+import { classifyLayer, renderArchitecture } from './_architecture.js';
 
 const list_projects = defineTool({
   name: 'list_projects',
@@ -105,12 +106,14 @@ const get_project_pulse = defineTool({
   },
   handler: withProject((args, { db }, project) => {
     const stats = db.getStats(project.id);
-    const arch = db.getArchitectureOverview(project.id);
     const files = db.listFiles(project.id);
     const conceptCount = new Map<string, number>();
+    const layerCount = new Map<string, number>();
     const entryPoints: string[] = [];
     for (const f of files) {
       if (f.is_entry_point) entryPoints.push(f.path);
+      const layer = classifyLayer(f.path, f.layer);
+      if (layer !== 'unknown') layerCount.set(layer, (layerCount.get(layer) ?? 0) + 1);
       try {
         const cs = JSON.parse(f.concepts || '[]') as string[];
         for (const c of cs) conceptCount.set(c, (conceptCount.get(c) ?? 0) + 1);
@@ -118,7 +121,7 @@ const get_project_pulse = defineTool({
     }
     const topConcepts = [...conceptCount.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([c]) => c);
     const langs = Object.entries(stats.languages).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([l, n]) => `${l}(${n})`).join(' ');
-    const layers = arch.filter(a => a.layer && a.layer !== 'unknown').map(a => `${a.layer}(${a.count})`).join(' ');
+    const layers = [...layerCount.entries()].sort((a, b) => b[1] - a[1]).map(([l, c]) => `${l}(${c})`).join(' ');
     const snaps = db.listSnapshots(project.id);
     const costs = db.getCostSummary(project.id);
     const avgCost = stats.file_count > 0 ? costs.total_cost_usd / stats.file_count : 0;
@@ -154,15 +157,19 @@ const get_project_pulse = defineTool({
 
 const get_architecture = defineTool({
   name: 'get_architecture',
-  description: 'Get project architecture overview (files grouped by layer)',
+  description: 'Markdown architecture map: files grouped by layer + entry points + dependency hubs (most depended-on) + circular dependencies. Use after get_project_pulse to orient in an unfamiliar codebase.',
   inputSchema: {
     type: 'object',
     properties: { project_name: { type: 'string' } },
     required: ['project_name'],
   },
   handler: withProject((args, { db }, project) => {
-    const overview = db.getArchitectureOverview(project.id);
-    return overview.map(l => `${l.layer}: ${l.count} files`).join('\n') || 'No architecture data.';
+    return renderArchitecture({
+      projectName: project.name,
+      files: db.listFiles(project.id),
+      hubs: db.getTopHubs(project.id, 12),
+      cycles: db.getCircularDeps(project.id),
+    });
   }),
 });
 
