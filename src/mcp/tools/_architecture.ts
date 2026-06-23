@@ -135,6 +135,7 @@ export interface ArchFile {
 
 export interface ArchInput {
   projectName: string;
+  summary?: string | null;
   files: ArchFile[];
   hubs: Array<{ path: string; dependents: number }>;
   cycles: Array<{ path_a: string; path_b: string }>;
@@ -142,7 +143,7 @@ export interface ArchInput {
 
 /** Dense Markdown architecture map: layers + entry points + hubs + cycles. */
 export function renderArchitecture(input: ArchInput): string {
-  const { projectName, files, hubs, cycles } = input;
+  const { projectName, summary, files, hubs, cycles } = input;
 
   const counts = new Map<FileLayer, number>();
   for (const f of files) {
@@ -153,7 +154,9 @@ export function renderArchitecture(input: ArchInput): string {
   let entryPoints = files.filter((f) => f.is_entry_point).map((f) => f.path);
   if (entryPoints.length === 0) entryPoints = files.filter((f) => isEntryName(f.path)).map((f) => f.path);
 
-  const out: string[] = [`# Architecture · ${projectName}`, '', '## Layers'];
+  const out: string[] = [`# Architecture · ${projectName}`];
+  if (summary) out.push('', summary);
+  out.push('', '## Layers');
   for (const l of LAYER_ORDER) {
     const n = counts.get(l);
     if (n) out.push(`- ${l === 'unknown' ? 'other' : l}: ${n} files`);

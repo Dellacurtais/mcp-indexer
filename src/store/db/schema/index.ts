@@ -9,6 +9,9 @@ import { BASELINE_DDL } from './baseline.js';
  */
 export function initSchema(db: DB): void {
   db.exec(BASELINE_DDL);
+  // Idempotent column adds for DBs created from an older baseline (CREATE TABLE
+  // IF NOT EXISTS won't touch an existing table). Probe-and-ALTER.
+  try { db.exec('SELECT summary FROM projects LIMIT 1'); } catch { db.exec('ALTER TABLE projects ADD COLUMN summary TEXT'); }
   // Stamp the collapsed-baseline version so getSchemaVersion() is meaningful
   // (the historical migration runner is a no-op). Idempotent.
   db.prepare("INSERT OR IGNORE INTO schema_version (version, name) VALUES (1, 'baseline')").run();

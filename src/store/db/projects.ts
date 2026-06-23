@@ -99,6 +99,11 @@ export function update(db: DB, id: number, updates: ProjectUpdates): void {
   db.prepare(`UPDATE projects SET ${fields.join(', ')} WHERE id = ?`).run(...values);
 }
 
+/** Persist the project-level architecture summary (set by `enrich --synthesize`). */
+export function setSummary(db: DB, id: number, summary: string): void {
+  db.prepare("UPDATE projects SET summary = ?, updated_at = datetime('now') WHERE id = ?").run(summary, id);
+}
+
 export function del(db: DB, id: number): void {
   pruneLocalHistory(db, id);
   db.prepare('DELETE FROM projects WHERE id = ?').run(id);

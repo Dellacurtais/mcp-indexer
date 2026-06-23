@@ -112,6 +112,12 @@ export interface Project {
   git_remote?: string | null;
   default_branch?: string | null;
   /**
+   * Project-level architecture summary written by `code-context enrich
+   * --synthesize` (an LLM paragraph synthesized from the per-file summaries).
+   * Null until enriched; surfaced at the top of `get_architecture`.
+   */
+  summary?: string | null;
+  /**
    * Frontend framework inferred from package.json at READ time (not persisted;
    * set by the `get` handler). Drives the preview element-selector mode
    * ("react" native detection vs the generic "universal" picker). Undefined on

@@ -469,6 +469,7 @@ export class CodeIndexDB {
       ? { id: primary.project_id, name: primary.name }
       : { id: project.id, name: project.name };
   }
+  setProjectSummary(id: number, summary: string): void { projects.setSummary(this.db, id, summary); }
   updateProject(id: number, updates: Parameters<typeof projects.update>[2]): void {
     // Runtime/shell config (node_version/runtime_versions/runner_shell/
     // package_managers) lives in the routed `project_runtime_config` table

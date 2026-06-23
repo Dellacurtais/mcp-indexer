@@ -166,6 +166,7 @@ const get_architecture = defineTool({
   handler: withProject((args, { db }, project) => {
     return renderArchitecture({
       projectName: project.name,
+      summary: project.summary,
       files: db.listFiles(project.id),
       hubs: db.getTopHubs(project.id, 12),
       cycles: db.getCircularDeps(project.id),

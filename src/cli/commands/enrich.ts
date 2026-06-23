@@ -127,6 +127,20 @@ export async function runEnrich(rootArg: string | undefined, opts: EnrichOpts): 
     if (opts.synthesize && summaries.length > 0 && spent < budget) {
       try {
         const syn = await provider.synthesize(project.name, summaries.slice(0, 60));
+        if (syn.text) {
+          db.setProjectSummary(project.id, syn.text); // surfaced atop get_architecture
+          const cost = (syn.inputTokens / 1e6) * price.inPerMTok + (syn.outputTokens / 1e6) * price.outPerMTok;
+          spent += cost;
+          db.insertCost({
+            projectId: project.id,
+            provider: provider.name,
+            model: provider.model,
+            operation: 'analysis',
+            inputTokens: syn.inputTokens,
+            outputTokens: syn.outputTokens,
+            costUsd: cost,
+          });
+        }
         out('\n# Architecture synthesis\n' + syn.text);
       } catch (e) {
         log(`synthesis skipped: ${e instanceof Error ? e.message : String(e)}`);
