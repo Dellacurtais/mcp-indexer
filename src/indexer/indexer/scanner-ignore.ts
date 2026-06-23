@@ -51,6 +51,8 @@ const DEFAULT_IGNORE_PATTERNS = [
 export const GLOB_PRUNE_DIRS = [
   'node_modules', '.git', '.mcp-indexer', 'dist', 'build', '.next', '.nuxt',
   'coverage', '__pycache__', '.cache',
+  // .NET / Angular / Gradle build-output & cache dirs (safe set — never source).
+  'obj', '.vs', '.angular', '.gradle',
 ];
 
 export interface ScannerIgnore {

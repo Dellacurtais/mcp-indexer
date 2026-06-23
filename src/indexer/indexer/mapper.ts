@@ -82,6 +82,12 @@ const HARD_EXCLUDE_DIRS = [
   '.vscode/',
   'storybook-static/',
   '.serverless/',
+  // .NET / Angular / Gradle build output & cache (safe set — bin/ and packages/
+  // are intentionally excluded since they can hold source in some projects).
+  'obj/',
+  '.vs/',
+  '.angular/',
+  '.gradle/',
 ];
 
 /**
