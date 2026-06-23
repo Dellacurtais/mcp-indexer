@@ -91,6 +91,51 @@ export function setSemanticHash(db: DB, projectId: number, path: string, content
     .run(contentHash, projectId, path);
 }
 
+/**
+ * Persist an LLM enrichment result (summary/concepts/layer) and stamp the
+ * semantic_hash so the file is no longer stale. This is the only writer of the
+ * semantic columns in this build (the structural pass preserves them).
+ */
+export function setFileSemantic(
+  db: DB,
+  projectId: number,
+  path: string,
+  data: { summary: string; concepts: string[]; layer: string; contentHash: string },
+): void {
+  db.prepare(
+    'UPDATE files SET summary = ?, concepts = ?, layer = ?, semantic_hash = ? WHERE project_id = ? AND path = ?',
+  ).run(data.summary, JSON.stringify(data.concepts), data.layer, data.contentHash, projectId, path);
+}
+
+export interface EnrichTarget {
+  path: string;
+  content_hash: string;
+  language: string;
+  line_count: number;
+  indegree: number;
+}
+
+/**
+ * Stale files ranked by importance (in-degree) — the enrichment pass spends its
+ * budget on the most depended-on files first ("where it matters"). A re-run only
+ * re-targets files that actually changed (semantic_hash diverged).
+ */
+export function listEnrichTargets(db: DB, projectId: number, limit: number): EnrichTarget[] {
+  return db.prepare(`
+    SELECT f.path AS path, f.content_hash AS content_hash, f.language AS language,
+           f.line_count AS line_count, COALESCE(h.cnt, 0) AS indegree
+    FROM files f
+    LEFT JOIN (
+      SELECT target_file_id, COUNT(*) AS cnt FROM file_dependencies
+      WHERE project_id = ? AND target_file_id IS NOT NULL
+      GROUP BY target_file_id
+    ) h ON h.target_file_id = f.id
+    WHERE f.project_id = ? AND (f.semantic_hash IS NULL OR f.semantic_hash != f.content_hash)
+    ORDER BY indegree DESC, f.line_count DESC
+    LIMIT ?
+  `).all(projectId, projectId, limit) as EnrichTarget[];
+}
+
 /** Paths whose semantic layer lags the current content (or never existed). */
 export function listSemanticStalePaths(db: DB, projectId: number, limit?: number): string[] {
   const rows = db.prepare(`

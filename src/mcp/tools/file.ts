@@ -245,6 +245,7 @@ const get_file_skeleton = defineTool({
     const lines = [`# ${filePath} · ${file.line_count} lines · ${file.language}`];
     const role = inferFileRole(filePath);
     if (role) lines.push(`Role: ${role}`);
+    if (file.summary) lines.push(`Summary: ${file.summary}`); // populated by `code-context enrich`
 
     const imports = joinCapped(db.getDependencies(file.id, project.id).map((d) => d.import_path));
     const exports = joinCapped(symbols.filter((s) => s.exported && !s.parent).map((s) => s.name));

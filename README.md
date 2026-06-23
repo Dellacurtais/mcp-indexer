@@ -73,12 +73,42 @@ Then:
 code-context index   <repo>             # build/refresh the index  (--watch, --no-embeddings)
 code-context status  [repo]             # files / symbols / vector coverage  (default: cwd)
 code-context search  "<query>" [repo]   # query the index  (--mode auto|fts|vector|hybrid, --type, --limit)
+code-context enrich  [repo]             # OPTIONAL paid LLM pass (AWS Bedrock) — see below
 code-context projects                   # list every indexed project
 code-context serve   [repo]             # the MCP server for an editor
 ```
 
 All projects share one index at `~/.code-context/index.db` (override with `MCP_DATA_DIR`).
 `status` is the quickest way to watch an embeddings backfill complete (coverage → 100%).
+
+### Optional: `enrich` — LLM summaries & layers (AWS Bedrock, opt-in & budgeted)
+
+Everything above is local and free. Layers in `get_architecture` are heuristic
+(path/role). `enrich` optionally pays an LLM to add **one-line file summaries**,
+**concept tags** and **verified layers** for the **most depended-on files** — which
+is what most reduces an agent's investigative reading. It's off unless you ask for it.
+
+```bash
+# Preview the targets (ranked by in-degree) — no AWS, no cost:
+code-context enrich <repo> --dry-run
+code-context enrich <repo> --mock                 # run the whole pipeline offline (fake summaries)
+
+# Real run (needs AWS creds in env: AWS_REGION + AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY):
+pnpm add @aws-sdk/client-bedrock-runtime           # one-time; kept out of the base install
+export CODE_CONTEXT_ANALYSIS=bedrock
+code-context enrich <repo> --limit 100 --budget 0.50
+```
+
+- **Targets only stale, high-in-degree files** (`semantic_hash` gate) — a re-run after edits
+  re-touches just the changed files. `--limit` caps how many you pay for; `--budget <usd>`
+  hard-stops on spend (default `$MCP_INDEX_BUDGET` or `$1.00`).
+- **Model:** default `amazon.titan-text-express-v1`. Override with `--model <id>`
+  (`CODE_CONTEXT_ANALYSIS_MODEL`). For **inference-profile-only** models (Nova, newer Claude)
+  pass the full id (`--model us.amazon.nova-lite-v1:0`) or add `--inference` to auto-prepend
+  the region prefix (`us.`/`eu.`/`apac.`).
+- **Result flows automatically** into `get_file_skeleton` (a `Summary:` line),
+  `get_file_structure`, `get_architecture` and `get_project_pulse` (real layers).
+  `--synthesize` also prints a short project-architecture paragraph built from the summaries.
 
 ## Editor setup (Copilot **Agent mode** required)
 

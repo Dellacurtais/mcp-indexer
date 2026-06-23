@@ -629,6 +629,8 @@ export class CodeIndexDB {
   /** Partial upsert that NEVER touches the semantic columns — see files-structural.ts. */
   upsertFileStructural(projectId: number, data: filesStructural.UpsertStructuralData): { fileId: number; created: boolean } { return filesStructural.upsertStructural(this.idx(projectId), projectId, data); }
   setFileSemanticHash(projectId: number, path: string, contentHash: string): void { filesStructural.setSemanticHash(this.idx(projectId), projectId, path, contentHash); }
+  setFileSemantic(projectId: number, path: string, data: { summary: string; concepts: string[]; layer: string; contentHash: string }): void { filesStructural.setFileSemantic(this.idx(projectId), projectId, path, data); }
+  listEnrichTargets(projectId: number, limit: number): filesStructural.EnrichTarget[] { return filesStructural.listEnrichTargets(this.idx(projectId), projectId, limit); }
   listSemanticStalePaths(projectId: number, limit?: number): string[] { return filesStructural.listSemanticStalePaths(this.idx(projectId), projectId, limit); }
   countSemanticStale(projectId: number): number { return filesStructural.countSemanticStale(this.idx(projectId), projectId); }
   upsertFileContent(fileId: number, content: string, sizeBytes?: number, projectId?: number): boolean { return fileContents.upsertContent(this.idx(projectId), fileId, content, sizeBytes); }

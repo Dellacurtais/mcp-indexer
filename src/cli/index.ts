@@ -2,6 +2,7 @@
 import { Command } from 'commander';
 import { runIndex } from './commands/index-cmd.js';
 import { runServe } from './commands/serve.js';
+import { runEnrich } from './commands/enrich.js';
 import { runStatus, runSearch, runProjects } from './commands/query.js';
 
 const program = new Command();
@@ -32,6 +33,45 @@ program
   .action(async (root: string | undefined, opts: { embeddings?: boolean; watch?: boolean }) => {
     await runServe(root, { noEmbeddings: opts.embeddings === false, watch: opts.watch !== false });
   });
+
+program
+  .command('enrich')
+  .description('Optional LLM enrichment (AWS Bedrock): summarize + classify the most depended-on files. Opt-in, budgeted.')
+  .argument('[root]', 'project root (default: current directory)')
+  .option('--limit <n>', 'max files to enrich (default 100)')
+  .option('--budget <usd>', 'max USD to spend (default $MCP_INDEX_BUDGET or 1.00)')
+  .option('--model <id>', 'Bedrock model id (default amazon.titan-text-express-v1)')
+  .option('--inference', 'prepend the region inference-profile prefix (us./eu./apac.) to the model id')
+  .option('--min-lines <n>', 'skip files shorter than N lines (default 8)')
+  .option('--mock', 'use the offline mock provider (preview the pipeline without AWS / cost)')
+  .option('--dry-run', 'list the files that would be enriched and exit (no cost)')
+  .option('--synthesize', 'also print a project architecture summary built from the file summaries')
+  .action(
+    async (
+      root: string | undefined,
+      opts: {
+        limit?: string;
+        budget?: string;
+        model?: string;
+        inference?: boolean;
+        minLines?: string;
+        mock?: boolean;
+        dryRun?: boolean;
+        synthesize?: boolean;
+      },
+    ) => {
+      await runEnrich(root, {
+        limit: opts.limit ? Number(opts.limit) : undefined,
+        budget: opts.budget ? Number(opts.budget) : undefined,
+        model: opts.model,
+        inference: !!opts.inference,
+        minLines: opts.minLines ? Number(opts.minLines) : undefined,
+        kind: opts.mock ? 'mock' : undefined,
+        dryRun: !!opts.dryRun,
+        synthesize: !!opts.synthesize,
+      });
+    },
+  );
 
 program
   .command('status')
