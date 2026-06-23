@@ -1,5 +1,7 @@
 # code-context
 
+**English** · [Português (pt-BR)](README.pt-BR.md)
+
 A local, offline **code-context server** that indexes a repository and exposes dense
 code-retrieval tools to AI coding assistants over the **Model Context Protocol (MCP)**.
 It makes **GitHub Copilot** (VS Code *and* JetBrains/IntelliJ, agent mode) smarter and
