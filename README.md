@@ -94,10 +94,13 @@ code-context enrich <repo> --dry-run
 code-context enrich <repo> --mock                 # run the whole pipeline offline (fake summaries)
 
 # Real run (needs AWS creds in env: AWS_REGION + AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY):
-pnpm add @aws-sdk/client-bedrock-runtime           # one-time; kept out of the base install
 export CODE_CONTEXT_ANALYSIS=bedrock
 code-context enrich <repo> --limit 100 --budget 0.50
 ```
+
+> The AWS SDK (`@aws-sdk/client-bedrock-runtime`) ships as an **optional dependency** —
+> `pnpm install` pulls it by default, but it's loaded lazily, so `index`/`serve`/`search`
+> never touch it. To skip it entirely, install with `pnpm install --no-optional`.
 
 - **Targets only stale, high-in-degree files** (`semantic_hash` gate) — a re-run after edits
   re-touches just the changed files. `--limit` caps how many you pay for; `--budget <usd>`
