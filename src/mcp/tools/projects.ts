@@ -95,12 +95,11 @@ const get_project_overview = defineTool({
 
 const get_project_pulse = defineTool({
   name: 'get_project_pulse',
-  description: 'Ultra-compact project overview (~250 tokens). Use this as the FIRST contextualization tool. Pass format="json" for a structured response.',
+  description: 'Ultra-compact Markdown project overview (~250 tokens). Use this as the FIRST contextualization tool.',
   inputSchema: {
     type: 'object',
     properties: {
       project_name: { type: 'string' },
-      format: { type: 'string', enum: ['text', 'json'], description: 'Response format (default text)' },
     },
     required: ['project_name'],
   },
@@ -119,7 +118,7 @@ const get_project_pulse = defineTool({
     }
     const topConcepts = [...conceptCount.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([c]) => c);
     const langs = Object.entries(stats.languages).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([l, n]) => `${l}(${n})`).join(' ');
-    const layers = arch.map(a => `${a.layer}(${a.count})`).join(' ');
+    const layers = arch.filter(a => a.layer && a.layer !== 'unknown').map(a => `${a.layer}(${a.count})`).join(' ');
     const snaps = db.listSnapshots(project.id);
     const costs = db.getCostSummary(project.id);
     const avgCost = stats.file_count > 0 ? costs.total_cost_usd / stats.file_count : 0;
@@ -128,49 +127,28 @@ const get_project_pulse = defineTool({
     const symPct = cov.symbols_total > 0 ? Math.round((cov.symbols_embedded / cov.symbols_total) * 100) : 0;
     const bodyPct = cov.symbol_bodies_total > 0 ? Math.round((cov.symbol_bodies_embedded / cov.symbol_bodies_total) * 100) : 0;
 
-    if (args.format === 'json') {
-      return JSON.stringify({
-        project: project.name,
-        file_count: stats.file_count,
-        symbol_count: stats.symbol_count,
-        total_lines: stats.total_lines,
-        last_indexed: stats.last_indexed ?? null,
-        languages: stats.languages,
-        layers: arch,
-        top_concepts: topConcepts,
-        entry_points: entryPoints.slice(0, 5),
-        snapshots_count: snaps.length,
-        vector_coverage: {
-          files_pct: filePct,
-          symbols_pct: symPct,
-          bodies_pct: bodyPct,
-        },
-        cost: {
-          total_usd: costs.total_cost_usd,
-          llm_analysis_usd: costs.llm_analysis_cost_usd,
-          embedding_usd: costs.embedding_cost_usd,
-          per_file_avg_usd: avgCost,
-        },
-      });
-    }
-
-    const costLine = costs.total_cost_usd > 0
-      ? `cost: $${costs.total_cost_usd.toFixed(4)} (llm $${costs.llm_analysis_cost_usd.toFixed(4)} + emb $${costs.embedding_cost_usd.toFixed(4)}) | avg/file: $${avgCost.toFixed(5)}`
-      : '';
+    const fmt = (n: number): string => n.toLocaleString('en-US');
     const covLine = cov.files_total > 0
-      ? `vector coverage: files ${filePct}% | symbols ${symPct}% | bodies ${bodyPct}%`
-      : 'vector coverage: none (search will use FTS only)';
-    const lines = [
-      `${project.name} | ${stats.file_count} files, ${stats.symbol_count} symbols, ${stats.total_lines}L | indexed: ${stats.last_indexed ?? 'never'}`,
-      `langs: ${langs}`,
-      `layers: ${layers}`,
-      `top concepts: ${topConcepts.join(', ')}`,
-      entryPoints.length ? `entry points: ${entryPoints.slice(0, 5).join(', ')}` : '',
-      `snapshots: ${snaps.length}`,
+      ? `Vector coverage: files ${filePct}% · symbols ${symPct}% · bodies ${bodyPct}%`
+      : 'Vector coverage: none (FTS only)';
+    const costLine = costs.total_cost_usd > 0
+      ? `Cost: $${costs.total_cost_usd.toFixed(4)} (llm $${costs.llm_analysis_cost_usd.toFixed(4)} + emb $${costs.embedding_cost_usd.toFixed(4)}) · avg/file $${avgCost.toFixed(5)}`
+      : '';
+    const body = [
+      langs ? `Languages: ${langs}` : '',
+      layers ? `Layers: ${layers}` : '',
+      topConcepts.length ? `Concepts: ${topConcepts.join(', ')}` : '',
+      entryPoints.length ? `Entry points: ${entryPoints.slice(0, 5).join(', ')}` : '',
+      snaps.length ? `Snapshots: ${snaps.length}` : '',
       covLine,
       costLine,
     ].filter(Boolean);
-    return lines.join('\n');
+    return [
+      `# ${project.name}`,
+      `${fmt(stats.file_count)} files · ${fmt(stats.symbol_count)} symbols · ${fmt(stats.total_lines)} lines · indexed ${stats.last_indexed ?? 'never'}`,
+      '',
+      ...body,
+    ].join('\n');
   }),
 });
 
