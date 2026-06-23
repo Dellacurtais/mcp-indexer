@@ -11,7 +11,16 @@ const VALID_LAYERS = new Set<FileLayer>([
   'presentation', 'business', 'data', 'infrastructure', 'config', 'test', 'unknown',
 ]);
 
-/** Heuristic layer for a path, preferring a real stored layer when present. */
+/** Recognized source-code extensions → the "everything else is business" catch-all. */
+const SRC_EXT = /\.(c|cc|cpp|cxx|h|hpp|cs|java|kt|kts|swift|rb|php|py|go|rs|scala|dart|ts|tsx|js|jsx|mjs|cjs|m|mm|ex|exs|clj)$/;
+
+/**
+ * Heuristic layer for a path, preferring a real stored layer when present.
+ * Polyglot: convention suffixes are matched regardless of extension (PascalCase
+ * `UserController.cs`, snake_case `user_service.py`, bare `models.py`), plus
+ * language-agnostic directory and framework-file rules. Rule order matters:
+ * test → config → infra → data → presentation → business → source fallback.
+ */
 export function classifyLayer(path: string, storedLayer?: string): FileLayer {
   if (storedLayer && storedLayer !== 'unknown' && VALID_LAYERS.has(storedLayer as FileLayer)) {
     return storedLayer as FileLayer;
@@ -20,48 +29,82 @@ export function classifyLayer(path: string, storedLayer?: string): FileLayer {
   const base = p.split('/').pop() ?? p;
   const role = inferFileRole(path);
 
-  if (role === 'test' || /\.(spec|test)\.[cm]?[tj]sx?$/.test(base) || /(^|\/)(__tests__|tests?|e2e|spec)\//.test(p)) {
+  // ── test ──
+  if (
+    role === 'test' ||
+    /\.(spec|test)\.[cm]?[tj]sx?$/.test(base) ||
+    /(^|\/)(__tests__|tests?|e2e|specs?)\//.test(p) ||
+    /\.tests?\//.test(p) ||                                 // .NET MyApp.Tests/
+    /(tests?|spec)\.(cs|java|kt|php|rb|go)$/.test(base) ||  // UserTests.cs, FooSpec.java
+    /^test_.*\.py$/.test(base) || /_test\.(py|go)$/.test(base)
+  ) {
     return 'test';
   }
+
+  // ── config ──
   if (
     /\.config\.[cm]?[tj]s$/.test(base) ||
     /(^|\/)config\//.test(p) ||
-    /^(tsconfig|package|vite\.config|webpack|rollup|esbuild|jest\.config|babel|\.eslintrc|eslint\.config|\.prettierrc)/.test(base)
+    /^(tsconfig|jsconfig|package|vite\.config|webpack|rollup|esbuild|jest\.config|vitest\.config|babel|\.eslintrc|eslint\.config|\.prettierrc|\.editorconfig)/.test(base) ||
+    /^appsettings(\.|$)/.test(base) || base === 'web.config' || base === 'app.config' ||
+    /\.(csproj|sln|props|targets|fsproj|vbproj)$/.test(base) ||
+    /^application\.(ya?ml|properties)$/.test(base) ||
+    base === 'settings.py' || base === 'pyproject.toml' || base === 'setup.py' || base === 'setup.cfg' ||
+    /^requirements.*\.txt$/.test(base) || base === 'pipfile' ||
+    base === 'go.mod' || base === 'go.sum' || base === 'composer.json' || base === 'composer.lock' ||
+    base === 'pom.xml' || /^build\.gradle(\.kts)?$/.test(base) || base === 'settings.gradle' ||
+    base === 'gemfile' || base === 'cargo.toml' || /^\.env($|\.)/.test(base)
   ) {
     return 'config';
   }
+
+  // ── infrastructure ──
   if (
-    /(^|\/)(infra|infrastructure|deploy|deployment|docker|\.github|ci|cd|k8s|kubernetes|terraform|ops|pipelines?)\//.test(p) ||
-    /^(dockerfile|docker-compose)/.test(base)
+    /(^|\/)(infra|infrastructure|deploy|deployment|docker|\.github|ci|cd|k8s|kubernetes|terraform|ops|pipelines?|helm|charts?|ansible)\//.test(p) ||
+    /^dockerfile/.test(base) || /^docker-compose/.test(base) ||
+    /\.(tf|tfvars|bicep)$/.test(base) ||
+    base === 'serverless.yml' || base === 'serverless.yaml' || base === 'wrangler.toml' || base === 'nginx.conf'
   ) {
     return 'infrastructure';
   }
+
+  // ── data ──
   if (
     role === 'repository' || role === 'model' || role === 'DTO' ||
-    /\.(repository|model|entity|dto|schema|dao)\.[cm]?[tj]s$/.test(base) ||
-    /(^|\/)(migrations?|entities|models?|repositories|repository|dao|store|stores|db|database|persistence)\//.test(p)
+    /(repository|entity|dao|dbcontext|context)\.(cs|java|kt|php|rb|go|py|ts|js)$/.test(base) || // UserRepository.cs, AppDbContext.cs
+    /[._-](repository|model|entity|dto|schema|dao|serializer)\.[cm]?[tj]sx?$/.test(base) ||
+    /^(models?|schemas?|serializers?|entities)\.py$/.test(base) ||                              // models.py, serializers.py
+    /\.sql$/.test(base) ||
+    /(^|\/)(migrations?|entities|models?|repositories|repository|dao|store|stores|db|database|persistence|schemas?)\//.test(p)
   ) {
     return 'data';
   }
+
+  // ── presentation ──
   if (
     role === 'Angular component' || role === 'React component' ||
     /\.(component|view|page)\.[cm]?[tj]sx?$/.test(base) ||
-    /\.(tsx|jsx|vue|svelte)$/.test(base) ||
-    /(^|\/)(components?|views?|pages?|ui|screens?|widgets?|templates?|layouts?)\//.test(p)
+    /\.(tsx|jsx|vue|svelte|astro|cshtml|razor|erb)$/.test(base) ||
+    /\.blade\.php$/.test(base) ||
+    base === 'views.py' ||
+    /(^|\/)(components?|views?|pages?|ui|screens?|widgets?|templates?|layouts?|wwwroot|public|partials?)\//.test(p)
   ) {
     return 'presentation';
   }
+
+  // ── business ──
   if (
     role === 'service' || role === 'controller' ||
+    /(controller|service|usecase|use-case|handler|resolver|manager|facade|interactor)\.(cs|java|kt|php|rb|go|py|ts|js)$/.test(base) ||
+    /[._-](service|controller|usecase|use-case|handler|resolver|manager|facade|middleware|validator|mapper)\.[cm]?[tj]sx?$/.test(base) ||
     /\.(service|controller|usecase|use-case|handler|resolver|manager|facade)\.[cm]?[tj]s$/.test(base) ||
-    /(^|\/)(services?|controllers?|usecases?|use-cases?|handlers?|business|domain|logic)\//.test(p)
+    /(^|\/)(services?|controllers?|usecases?|use-cases?|handlers?|business|domain|logic|application)\//.test(p)
   ) {
     return 'business';
   }
+
   // Recognized source code with no convention → business (the catch-all for app logic).
-  if (/\.[cm]?[tj]sx?$/.test(base) || /\.(py|go|rs|java|cs|kt|swift|rb|php|c|h|cpp|hpp|scala|dart)$/.test(base)) {
-    return 'business';
-  }
+  if (SRC_EXT.test(base)) return 'business';
   return 'unknown';
 }
 
@@ -70,12 +113,17 @@ const LAYER_ORDER: FileLayer[] = [
 ];
 
 function isEntryName(path: string): boolean {
-  const base = (path.replace(/\\/g, '/').split('/').pop() ?? '').toLowerCase();
+  const p = path.replace(/\\/g, '/').toLowerCase();
+  const base = p.split('/').pop() ?? '';
   return (
     /^(main|cli|server|bootstrap|program)\.[cm]?[tj]sx?$/.test(base) ||
-    /^(main|program)\.(py|go|rs|java|cs)$/.test(base) ||
-    base === 'app.module.ts' ||
-    base === 'program.cs'
+    /^(main|program)\.(py|go|rs|java|cs|kt)$/.test(base) ||
+    base === 'app.module.ts' ||                              // Angular root
+    base === 'program.cs' || base === 'startup.cs' || base === 'global.asax' ||  // .NET
+    base === 'manage.py' || base === '__main__.py' || base === 'wsgi.py' || base === 'asgi.py' ||  // Python
+    /application\.(java|kt)$/.test(base) ||                  // Spring *Application.java
+    /(^|\/)cmd\/[^/]+\/main\.go$/.test(p) ||                 // Go cmd/<x>/main.go
+    base === 'index.php' || base === 'artisan'               // PHP / Laravel
   );
 }
 
