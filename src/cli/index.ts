@@ -14,10 +14,10 @@ program
 program
   .command('index')
   .description('Build/refresh a project index (structural + local embeddings). Run this first.')
-  .argument('<root>', 'project root to index')
+  .argument('[root]', 'project root to index (default: current directory)')
   .option('--no-embeddings', 'structural + FTS only (skip local embeddings)')
   .option('--watch', 'keep watching for changes after indexing (incremental)')
-  .action(async (root: string, opts: { embeddings?: boolean; watch?: boolean }) => {
+  .action(async (root: string | undefined, opts: { embeddings?: boolean; watch?: boolean }) => {
     await runIndex(root, { noEmbeddings: opts.embeddings === false, watch: !!opts.watch });
   });
 

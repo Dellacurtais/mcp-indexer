@@ -123,9 +123,9 @@ dir or a drive root).
 ## CLI reference
 
 ```bash
-code-context index   <repo>             # build/refresh the index   (--watch, --no-embeddings)
+code-context index   [repo]             # build/refresh the index   (--watch, --no-embeddings)
 code-context serve   [repo]             # the MCP server for an editor (omit repo to auto-detect roots)
-code-context status  [repo]             # files / symbols / vector coverage  (default: cwd)
+code-context status  [repo]             # files / symbols / vector coverage
 code-context search  "<query>" [repo]   # query the index  (--mode, --type, --limit, --lang, --exclude-lang)
 code-context enrich  [repo]             # OPTIONAL paid LLM pass (AWS Bedrock) — see below
 code-context projects                   # list every indexed project
@@ -138,7 +138,9 @@ code-context projects                   # list every indexed project
 | `search` | `--mode auto\|fts\|vector\|hybrid`, `--type files\|symbols\|all`, `--limit <n>`, `--lang ts,py`, `--exclude-lang css,scss` |
 | `enrich` | `--limit`, `--budget`, `--model`, `--inference`, `--min-lines`, `--mock`, `--dry-run`, `--synthesize` |
 
-All projects share one index at `~/.code-context/index.db` (override with `MCP_DATA_DIR`).
+`[repo]` is optional everywhere — `cd` into your repo and omit it, and the command uses the
+**current directory** (the home dir / a drive root are refused). All projects share one index at
+`~/.code-context/index.db` (override with `MCP_DATA_DIR`).
 
 ---
 

@@ -14,8 +14,8 @@ export interface IndexOpts {
   watch?: boolean;
 }
 
-export async function runIndex(rootArg: string, opts: IndexOpts): Promise<void> {
-  const root = resolveRoot(rootArg);
+export async function runIndex(rootArg: string | undefined, opts: IndexOpts): Promise<void> {
+  const root = resolveRoot(rootArg ?? process.cwd());
   const opened = openProject(root, opts);
 
   log(`indexing ${opened.project.name} (${root}) …`);

@@ -127,9 +127,9 @@ editor (ele recusa sua home ou a raiz do drive).
 ## Referência da CLI
 
 ```bash
-code-context index   <repo>             # constrói/atualiza o índice   (--watch, --no-embeddings)
+code-context index   [repo]             # constrói/atualiza o índice   (--watch, --no-embeddings)
 code-context serve   [repo]             # o servidor MCP para o editor (omita o repo p/ auto-detectar roots)
-code-context status  [repo]             # arquivos / símbolos / cobertura de vetores  (padrão: cwd)
+code-context status  [repo]             # arquivos / símbolos / cobertura de vetores
 code-context search  "<query>" [repo]   # consulta o índice  (--mode, --type, --limit, --lang, --exclude-lang)
 code-context enrich  [repo]             # passo LLM PAGO opcional (AWS Bedrock) — veja abaixo
 code-context projects                   # lista todos os projetos indexados
@@ -142,7 +142,9 @@ code-context projects                   # lista todos os projetos indexados
 | `search` | `--mode auto\|fts\|vector\|hybrid`, `--type files\|symbols\|all`, `--limit <n>`, `--lang ts,py`, `--exclude-lang css,scss` |
 | `enrich` | `--limit`, `--budget`, `--model`, `--inference`, `--min-lines`, `--mock`, `--dry-run`, `--synthesize` |
 
-Todos os projetos compartilham um índice em `~/.code-context/index.db` (mude com `MCP_DATA_DIR`).
+`[repo]` é opcional em todos — dê `cd` no seu repo e omita: o comando usa o **diretório atual** (a
+home / a raiz do drive são recusadas). Todos os projetos compartilham um índice em
+`~/.code-context/index.db` (mude com `MCP_DATA_DIR`).
 
 ---
 
