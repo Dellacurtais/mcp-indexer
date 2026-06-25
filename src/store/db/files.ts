@@ -154,14 +154,29 @@ export function delByProject(db: DB, projectId: number): void {
   db.prepare('DELETE FROM files WHERE project_id = ?').run(projectId);
 }
 
-export function search(db: DB, projectId: number, query: string, limit: number = 20): DBFile[] {
+export function search(
+  db: DB,
+  projectId: number,
+  query: string,
+  limit: number = 20,
+  opts?: { languages?: string[]; excludeLanguages?: string[] },
+): DBFile[] {
+  const inc = (opts?.languages ?? []).map((l) => l.toLowerCase()).filter(Boolean);
+  const exc = (opts?.excludeLanguages ?? []).map((l) => l.toLowerCase()).filter(Boolean);
+  const where = ['fts.files_fts MATCH ?', 'f.project_id = ?'];
+  const params: unknown[] = [query, projectId];
+  // Filter language IN THE SQL so a language-scoped search doesn't over-fetch
+  // (the tool's `limit*5`) then drop in memory.
+  if (inc.length) { where.push(`lower(f.language) IN (${inc.map(() => '?').join(',')})`); params.push(...inc); }
+  if (exc.length) { where.push(`lower(f.language) NOT IN (${exc.map(() => '?').join(',')})`); params.push(...exc); }
+  params.push(limit);
   return db.prepare(`
     SELECT f.* FROM files_fts fts
     JOIN files f ON f.id = fts.rowid
-    WHERE fts.files_fts MATCH ? AND f.project_id = ?
+    WHERE ${where.join(' AND ')}
     ORDER BY rank
     LIMIT ?
-  `).all(query, projectId, limit) as DBFile[];
+  `).all(...params) as DBFile[];
 }
 
 export interface FileSnapshotData {

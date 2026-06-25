@@ -21,6 +21,7 @@
     "dev": "tsx src/cli/index.ts",
     "pretest": "pnpm build",
     "test": "node --test scripts/smoke.test.mjs",
+    "perf:search": "node scripts/perf-search.mjs",
     "prepublishOnly": "pnpm build"
   },
   "dependencies": {

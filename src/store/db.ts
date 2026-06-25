@@ -622,7 +622,7 @@ export class CodeIndexDB {
   touchFileMtime(projectId: number, path: string, mtimeMs: number): void { files.touchMtime(this.idx(projectId), projectId, path, mtimeMs); }
   deleteFile(projectId: number, path: string): void { files.del(this.idx(projectId), projectId, path); }
   deleteFilesByProject(projectId: number): void { files.delByProject(this.idx(projectId), projectId); }
-  searchFiles(projectId: number, query: string, limit: number = 20): DBFile[] { return files.search(this.idx(projectId), projectId, query, limit); }
+  searchFiles(projectId: number, query: string, limit: number = 20, opts?: { languages?: string[]; excludeLanguages?: string[] }): DBFile[] { return files.search(this.idx(projectId), projectId, query, limit, opts); }
   saveFileSnapshot(data: files.FileSnapshotData): void { files.saveSnapshot(this.idx(data.projectId), data); }
   getFileSnapshots(runId: number, projectId?: number): FileSnapshot[] { return files.listSnapshots(this.idx(projectId), runId); }
 

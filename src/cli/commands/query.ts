@@ -97,14 +97,18 @@ export async function runSearch(
     const include = toLangSet(opts.lang);
     const exclude = toLangSet(opts.excludeLang);
     const hasLangFilter = include.size > 0 || exclude.size > 0;
+    const searchType = (opts.type as 'files' | 'symbols' | 'all') ?? 'all';
+    const filterInSql = hasLangFilter && searchType === 'files';
     const raw = await opened.ctx.hybridSearch.search(
       opened.project.id,
       opened.project.name,
       query,
       {
         mode: (opts.mode as 'auto' | 'fts' | 'vector' | 'hybrid') ?? 'auto',
-        type: (opts.type as 'files' | 'symbols' | 'all') ?? 'all',
-        limit: hasLangFilter ? Math.min(limit * 5, 100) : limit,
+        type: searchType,
+        limit: hasLangFilter && !filterInSql ? Math.min(limit * 5, 100) : limit,
+        languages: include.size ? [...include] : undefined,
+        excludeLanguages: exclude.size ? [...exclude] : undefined,
       },
     );
     const results = hasLangFilter

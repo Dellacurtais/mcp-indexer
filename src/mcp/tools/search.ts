@@ -83,11 +83,17 @@ const search = defineTool({
     const exclude = toLangSet(args.exclude_languages);
     const hasLangFilter = include.size > 0 || exclude.size > 0;
 
+    const searchType = (args.type as SearchType) ?? 'all';
+    // The language filter is pushed into the FTS file query (SQL), so a
+    // `type:'files'` search needs no over-fetch. Symbols/content are still
+    // post-filtered in memory, so keep the over-fetch when they're in scope.
+    const filterInSql = hasLangFilter && searchType === 'files';
     const { results: raw, diagnostics } = await hybridSearch.searchWithDiag(project.id, project.name, args.query as string, {
       mode: requestedMode,
-      type: (args.type as SearchType) ?? 'all',
-      // Over-fetch when filtering by language so enough survive to fill `limit`.
-      limit: hasLangFilter ? Math.min(limit * 5, 100) : limit,
+      type: searchType,
+      limit: hasLangFilter && !filterInSql ? Math.min(limit * 5, 100) : limit,
+      languages: include.size ? [...include] : undefined,
+      excludeLanguages: exclude.size ? [...exclude] : undefined,
     });
 
     const results = hasLangFilter

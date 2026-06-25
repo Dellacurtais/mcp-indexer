@@ -21,6 +21,9 @@ import {
 import { expandGraph } from '@ctx/indexer/search/graph-expansion-source.js';
 
 /** Diagnostic info returned alongside search results. */
+/** Language scope for the FTS file query (pushed into SQL, not post-filtered). */
+type LangFilter = { languages?: string[]; excludeLanguages?: string[] };
+
 export interface SearchDiagnostics {
   vectorAvailable: boolean;
   embeddingAvailable: boolean;
@@ -205,7 +208,7 @@ export class HybridSearch {
     projectId: number,
     projectName: string,
     query: string,
-    options?: { mode?: SearchMode; type?: SearchType; limit?: number }
+    options?: { mode?: SearchMode; type?: SearchType; limit?: number; languages?: string[]; excludeLanguages?: string[] }
   ): Promise<HybridSearchResult[]> {
     const { results } = await this.searchWithDiag(projectId, projectName, query, options);
     return results;
@@ -216,11 +219,17 @@ export class HybridSearch {
     projectId: number,
     projectName: string,
     query: string,
-    options?: { mode?: SearchMode; type?: SearchType; limit?: number }
+    options?: { mode?: SearchMode; type?: SearchType; limit?: number; languages?: string[]; excludeLanguages?: string[] }
   ): Promise<{ results: HybridSearchResult[]; diagnostics: SearchDiagnostics }> {
     const requestedMode = options?.mode ?? 'auto';
     const type = options?.type ?? 'all';
     const limit = options?.limit ?? 20;
+    // Language scope pushed into the FTS file query (db.searchFiles) so a
+    // language-filtered search doesn't over-fetch then drop in memory.
+    const langFilter =
+      (options?.languages?.length || options?.excludeLanguages?.length)
+        ? { languages: options?.languages, excludeLanguages: options?.excludeLanguages }
+        : undefined;
     // Per-source candidate depth before fusion. Tunable so RRF coverage can
     // be measured against latency instead of hardcoding the trade-off.
     const overFetch = limit * envInt('MCP_SEARCH_OVERFETCH_MULT', 3);
@@ -240,7 +249,8 @@ export class HybridSearch {
 
     // Check cache (key includes resolved mode so `auto` and `hybrid`
     // share a result row when the planner picks `hybrid`).
-    const cacheKey = `${projectId}:${query}:${mode}:${type}:${limit}`;
+    const langKey = langFilter ? `:l${(langFilter.languages ?? []).join(',')}:x${(langFilter.excludeLanguages ?? []).join(',')}` : '';
+    const cacheKey = `${projectId}:${query}:${mode}:${type}:${limit}${langKey}`;
     const cached = this.queryCache.get(cacheKey);
     if (cached && Date.now() - cached.ts < this.queryCacheTtlMs) {
       // Return the diagnostics of the run that produced the entry — a
@@ -267,7 +277,7 @@ export class HybridSearch {
     };
 
     if (mode === 'fts') {
-      const results = await this.ftsSearch(projectId, query, type, limit);
+      const results = await this.ftsSearch(projectId, query, type, limit, langFilter);
       diag.ftsCount = results.length;
       // Top-up from the raw-content index: on structural-only projects
       // files_fts has empty summaries/concepts, so identifier queries that
@@ -317,7 +327,7 @@ export class HybridSearch {
     }
 
     const [ftsResults, vectorResults, recentResults, contentResults] = await Promise.allSettled([
-      this.ftsSearch(projectId, query, type, overFetch),
+      this.ftsSearch(projectId, query, type, overFetch, langFilter),
       this.vectorSearchExpanded(projectId, projectName, query, type, overFetch, hybridDiag),
       this.runRecentSearch(projectId, query, type, Math.max(5, limit)),
       Promise.resolve(this.runContentSearch(projectId, query, type, Math.max(10, limit))),
@@ -410,15 +420,15 @@ export class HybridSearch {
     }
   }
 
-  private async ftsSearch(projectId: number, query: string, type: SearchType, limit: number): Promise<HybridSearchResult[]> {
+  private async ftsSearch(projectId: number, query: string, type: SearchType, limit: number, langFilter?: LangFilter): Promise<HybridSearchResult[]> {
     // Precision-first: require ALL terms (FTS5 AND). A multi-word query like
     // "user service create" should not match every doc mentioning just one of
     // them. If AND finds nothing, fall back to OR so a paraphrase that shares
     // only some terms is still recoverable (single-term queries are identical
     // either way, so the fallback is a no-op there).
-    const results = this.runFtsQuery(projectId, query, type, limit, 'AND');
+    const results = this.runFtsQuery(projectId, query, type, limit, 'AND', langFilter);
     if (results.length === 0 && ftsTokens(query).length > 1) {
-      return this.runFtsQuery(projectId, query, type, limit, 'OR');
+      return this.runFtsQuery(projectId, query, type, limit, 'OR', langFilter);
     }
     return results;
   }
@@ -430,13 +440,14 @@ export class HybridSearch {
     type: SearchType,
     limit: number,
     connector: 'AND' | 'OR',
+    langFilter?: LangFilter,
   ): HybridSearchResult[] {
     const results: HybridSearchResult[] = [];
     const ftsQuery = this.sanitizeFtsQuery(query, connector);
     if (ftsQuery.length === 0) return results;
 
     if (type === 'files' || type === 'all') {
-      const files = this.db.searchFiles(projectId, ftsQuery, limit);
+      const files = this.db.searchFiles(projectId, ftsQuery, limit, langFilter);
       for (let i = 0; i < files.length; i++) {
         results.push({
           id: files[i].id,

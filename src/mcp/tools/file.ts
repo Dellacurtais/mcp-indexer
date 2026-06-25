@@ -307,6 +307,11 @@ const read_file = defineTool({
     const file = db.getFile(project.id, filePath);
     const abs = join(project.root_path, filePath);
     const AUTO_FULL_THRESHOLD = 800;
+    // Auto-full also requires the file to be small in BYTES — a short-in-lines
+    // but huge-in-bytes file (minified/generated, long lines) would otherwise
+    // claim "full file" and then get trimmed by the read budget. Kept under the
+    // 22KB read budget so an auto-full is always returned whole.
+    const AUTO_FULL_BYTE_THRESHOLD = 20_000;
 
     // Symbol-targeted modes (shared by both DB-indexed and disk-fallback paths).
     // Loads full content once and extracts only the requested symbol body.
@@ -364,7 +369,7 @@ const read_file = defineTool({
         const lines = content.split('\n');
         const total = lines.length;
         const force = args.force === true;
-        const isAutoFull = autoFull && !args.search_term && startLineArg === undefined && endLineArg === undefined && total <= AUTO_FULL_THRESHOLD;
+        const isAutoFull = autoFull && !args.search_term && startLineArg === undefined && endLineArg === undefined && total <= AUTO_FULL_THRESHOLD && content.length <= AUTO_FULL_BYTE_THRESHOLD;
 
         let headerNote = '';
         if (typeof args.search_term === 'string' && args.search_term.length > 0 && !isAutoFull) {
@@ -415,7 +420,8 @@ const read_file = defineTool({
       !args.search_term &&
       startLine === undefined &&
       endLine === undefined &&
-      file.line_count <= AUTO_FULL_THRESHOLD;
+      file.line_count <= AUTO_FULL_THRESHOLD &&
+      (file.size ?? 0) <= AUTO_FULL_BYTE_THRESHOLD;
 
     if (typeof args.search_term === 'string' && args.search_term.length > 0 && !isAutoFull) {
       const term = args.search_term as string;
