@@ -15,10 +15,10 @@ file locations, or call sites.
 
 ## How to use it (recommended flow)
 
-1. **Orient** — call `pack_context` with the task in plain language. One call
-   returns the most relevant symbols (`path:line — kind name — signature`) plus a
-   skeleton of the top files. (`get_project_pulse` / `get_repo_map` for a
-   high-level overview.)
+1. **Orient** — call `pack_context` with a `query` describing the task in plain
+   language. One call returns the most relevant symbols (`path:line — kind name —
+   signature`) plus a skeleton of the top files. (`get_project_pulse` /
+   `get_repo_map` for a high-level overview.)
 2. **Search** — `search` (mode `auto` routes identifiers → fast lexical FTS and
    natural language → semantic). `grep_code` for an exact string/regex.
    `search_by_kind` to list e.g. all classes.

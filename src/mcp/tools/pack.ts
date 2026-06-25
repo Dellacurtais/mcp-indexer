@@ -27,14 +27,21 @@ const pack_context = defineTool({
     required: ['project_name', 'query'],
   },
   handler: withProject(async (args, { hybridSearch, db }, project) => {
-    const query = String(args.query ?? '');
+    // Accept `task` as an alias for `query` — the instructions phrase it as "the
+    // task", so a model occasionally passes that key.
+    const query = String(args.query ?? args.task ?? '').trim();
+    if (!query) {
+      return 'pack_context needs a non-empty "query" — the task in plain language (e.g. "how does the reranker work") or a symbol name.';
+    }
     const limit = Math.min(Math.max(Number(args.limit ?? 12), 1), 30);
     const results = await hybridSearch.search(project.id, project.name, query, {
       mode: 'auto',
       type: 'all',
       limit,
     });
-    if (results.length === 0) return `No matches for "${query}".`;
+    if (results.length === 0) {
+      return `No matches for "${query}". Try fewer/broader keywords, or grep_code for an exact string.`;
+    }
 
     const hitLines: string[] = [];
     const topFiles: string[] = [];
