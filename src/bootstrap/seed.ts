@@ -40,7 +40,10 @@ function upsertSqliteVec(raw: ReturnType<CodeIndexDB['raw']>, isDefault: boolean
 
 export function seedLocalDefaults(db: CodeIndexDB): void {
   const raw = db.raw();
-  const remoteOptIn = process.env.MCP_EMBEDDINGS?.trim().toLowerCase() === 'remote';
+  const emb = process.env.MCP_EMBEDDINGS?.trim().toLowerCase();
+  // 'remote' (Cloudflare) and 'bedrock' (AWS Titan) both keep the env-seeded
+  // remote backend as default instead of forcing local ONNX.
+  const remoteOptIn = emb === 'remote' || emb === 'bedrock';
 
   if (remoteOptIn) {
     // Keep the env-seeded remote backend as default; add local only as a fallback.

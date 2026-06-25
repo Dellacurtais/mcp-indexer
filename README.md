@@ -262,6 +262,8 @@ server too — no credentials in the editor launcher config.
 | `MCP_DATA_DIR` | `~/.code-context` | Index DB + global `.env` location |
 | `MCP_MODEL_CACHE_DIR` | `~/.mcp/models` | Local ONNX model cache |
 | `MCP_EMBEDDING_MODEL` | `Xenova/multilingual-e5-small` | Local embedding model |
+| `MCP_EMBEDDINGS` | — | `bedrock` → use AWS Titan embeddings instead of local ONNX (PAID; reuses `AWS_*`; **re-index required** — 1024-dim vs 384). `remote` → Cloudflare (with `MCP_INDEX_WORKER_URL`) |
+| `CODE_CONTEXT_EMBED_MODEL` | `amazon.titan-embed-text-v2:0` | Bedrock embedding model id |
 | `MCP_INDEX_BUDGET` | `1.00` | Default USD cap for an `enrich` run |
 | `CODE_CONTEXT_ANALYSIS` | — | `bedrock` or `mock` — enables the `enrich` provider |
 | `CODE_CONTEXT_ANALYSIS_MODEL` | `amazon.titan-text-express-v1` | Bedrock model id |

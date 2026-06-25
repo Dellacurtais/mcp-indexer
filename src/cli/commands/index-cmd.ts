@@ -27,7 +27,12 @@ export async function runIndex(rootArg: string | undefined, opts: IndexOpts): Pr
   log(`indexed ${res.indexed}/${res.totalFiles} files (${res.errorCount} errors, ${res.durationMs}ms)`);
 
   if (opened.embeddingsOn) {
-    log('embedding (first run downloads the local ONNX model ~100MB) …');
+    const fp = opened.ctx.embeddingService.fingerprint?.() ?? '';
+    log(
+      fp && !/^local|e5|xenova/i.test(fp)
+        ? `embedding via ${fp} (remote backend) …`
+        : 'embedding (first run downloads the local ONNX model ~100MB) …',
+    );
     const eb = await runEmbedBackfill(
       opened.db,
       opened.project,

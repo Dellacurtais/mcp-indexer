@@ -266,6 +266,8 @@ do editor — sem credenciais na config do launcher.
 | `MCP_DATA_DIR` | `~/.code-context` | Local do índice + `.env` global |
 | `MCP_MODEL_CACHE_DIR` | `~/.mcp/models` | Cache de modelos ONNX locais |
 | `MCP_EMBEDDING_MODEL` | `Xenova/multilingual-e5-small` | Modelo de embedding local |
+| `MCP_EMBEDDINGS` | — | `bedrock` → usa embeddings AWS Titan no lugar do ONNX local (PAGO; reusa `AWS_*`; **exige re-index** — 1024-dim vs 384). `remote` → Cloudflare (com `MCP_INDEX_WORKER_URL`) |
+| `CODE_CONTEXT_EMBED_MODEL` | `amazon.titan-embed-text-v2:0` | Id do modelo de embedding do Bedrock |
 | `MCP_INDEX_BUDGET` | `1.00` | Teto padrão em USD para uma execução do `enrich` |
 | `CODE_CONTEXT_ANALYSIS` | — | `bedrock` ou `mock` — habilita o provider do `enrich` |
 | `CODE_CONTEXT_ANALYSIS_MODEL` | `amazon.titan-text-express-v1` | Id do modelo Bedrock |

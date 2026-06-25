@@ -114,6 +114,30 @@ function seedEmbeddingAndVectorStore(db: DB, env: NodeJS.ProcessEnv): void {
     }
   }
 
+  // Bedrock Titan embeddings (PAID; opt in with MCP_EMBEDDINGS=bedrock + AWS creds).
+  // 1024-dim by default — switching from local ONNX (384-dim) needs a re-index.
+  if (
+    env.MCP_EMBEDDINGS?.trim().toLowerCase() === 'bedrock' &&
+    env.AWS_REGION && env.AWS_ACCESS_KEY_ID && env.AWS_SECRET_ACCESS_KEY &&
+    !embedding.list(db).some((c) => c.id === 'bedrock')
+  ) {
+    embedding.upsert(db, {
+      id: 'bedrock',
+      kind: 'bedrock',
+      name: 'AWS Bedrock Titan',
+      enabled: true,
+      is_default: true,
+      config: {
+        region: env.AWS_REGION,
+        modelId: env.CODE_CONTEXT_EMBED_MODEL ?? 'amazon.titan-embed-text-v2:0',
+        accessKeyId: env.AWS_ACCESS_KEY_ID,
+        secretAccessKey: env.AWS_SECRET_ACCESS_KEY,
+        sessionToken: env.AWS_SESSION_TOKEN,
+        dimensions: 1024,
+      },
+    });
+  }
+
   if (env.QDRANT_URL && !vectorStore.list(db).some((c) => c.id === 'qdrant')) {
     const hasOther = vectorStore.list(db).some((c) => c.is_default);
     vectorStore.upsert(db, {
