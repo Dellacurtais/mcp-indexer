@@ -373,6 +373,7 @@ const get_symbol_body = defineTool({
     const asJson = args.format === 'json';
 
     let sym: DBSymbol | undefined;
+    let ambiguityNote = '';
     if (filePath) {
       sym = db.findSymbolByName(project.id, symbolName, { filePath });
     } else {
@@ -390,6 +391,14 @@ const get_symbol_body = defineTool({
         });
       }
       sym = candidates[0];
+      // Text mode previously returned the first of N defs silently — surface the
+      // ambiguity like find_references/prepare_edit do.
+      if (candidates.length > 1) {
+        ambiguityNote =
+          `[note] '${symbolName}' is defined in ${candidates.length} files — showing the first; pass file_path to pick another:\n` +
+          candidates.slice(0, 8).map(c => `  - ${c.file_path}:${c.line ?? '?'} [${c.kind}]`).join('\n') +
+          '\n\n';
+      }
     }
 
     let targetFile: string | null = sym?.file_path ?? filePath ?? null;
@@ -428,7 +437,7 @@ const get_symbol_body = defineTool({
         });
       }
       const note = usedFallback ? ' [regex fallback]' : '';
-      return `${result.file}:${result.start_line}-${result.end_line}${note}\n\n${result.body}`;
+      return `${ambiguityNote}${result.file}:${result.start_line}-${result.end_line}${note}\n\n${result.body}`;
     } catch (e) {
       const msg = (e as Error).message;
       return asJson

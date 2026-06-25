@@ -34,6 +34,11 @@ export function withProject(handler: ProjectToolHandler): McpTool['handler'] {
  * paths that include the project root prefix.
  */
 export function normalizeFilePath(filePath: string, projectRoot?: string): string {
+  if (typeof filePath !== 'string' || filePath.trim() === '') {
+    // Clear, actionable error instead of a raw TypeError when a required
+    // `file_path` is missing/non-string (the MCP layer doesn't enforce required).
+    throw new Error("'file_path' is required — pass a string path relative to the project root.");
+  }
   let p = filePath.replace(/\\/g, '/');
   if (p.startsWith('./')) p = p.slice(2);
   if (projectRoot) {

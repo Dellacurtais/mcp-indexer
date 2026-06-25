@@ -613,17 +613,44 @@ export class TreeSitterExtractor {
     return null;
   }
 
+  private isTypeNode(t: string): boolean {
+    return t === 'type_identifier' || t === 'identifier' || t === 'generic_type'
+      || t === 'nested_type_identifier' || t === 'member_expression';
+  }
+
+  /**
+   * Locate a TS heritage clause. In tree-sitter-typescript, `extends_clause` and
+   * `implements_clause` are nested inside a `class_heritage` wrapper (not bare
+   * children of the class) — the old code looked one level too shallow, so an
+   * `implements`-only class fell back to raw heritage text ("implements X").
+   */
+  private findHeritageClause(node: Parser.SyntaxNode, clauseType: string): Parser.SyntaxNode | null {
+    for (const child of node.namedChildren) {
+      if (child.type === clauseType) return child;
+      if (child.type === 'class_heritage') {
+        const inner = child.namedChildren.find((c) => c.type === clauseType);
+        if (inner) return inner;
+      }
+    }
+    return null;
+  }
+
   /** Get extends clause for classes. */
   private getExtends(node: Parser.SyntaxNode, language: string): string | null {
-    // TS/JS: class_heritage / extends_clause
+    // TS: the superclass lives in an `extends_clause` (under `class_heritage`).
+    const extendsClause = this.findHeritageClause(node, 'extends_clause');
+    if (extendsClause) {
+      const typeNode = extendsClause.namedChildren.find((c) => this.isTypeNode(c.type));
+      return typeNode?.text ?? extendsClause.text.replace(/^extends\s+/, '').trim();
+    }
+
+    // JS: `class_heritage` directly wraps the superclass expression (no clause
+    // wrapper). In TS its children are extends/implements clauses — not type
+    // nodes — so this never mis-fires on an implements-only class.
     for (const child of node.namedChildren) {
-      if (child.type === 'class_heritage' || child.type === 'extends_clause'
-          || child.type === 'superclass') {
-        // Extract the class name from the clause
-        const typeNode = child.namedChildren.find(c =>
-          c.type === 'identifier' || c.type === 'type_identifier' || c.type === 'generic_type'
-        );
-        return typeNode?.text ?? child.text.replace(/^extends\s+/, '').trim();
+      if (child.type === 'class_heritage') {
+        const direct = child.namedChildren.find((c) => this.isTypeNode(c.type));
+        if (direct) return direct.text;
       }
     }
 
@@ -644,15 +671,11 @@ export class TreeSitterExtractor {
   private getImplements(node: Parser.SyntaxNode, language: string): string[] {
     const impls: string[] = [];
 
-    for (const child of node.namedChildren) {
-      if (child.type === 'implements_clause' || child.type === 'class_heritage') {
-        // Extract interface names
-        for (const typeNode of child.namedChildren) {
-          if (typeNode.type === 'type_identifier' || typeNode.type === 'identifier'
-              || typeNode.type === 'generic_type') {
-            impls.push(typeNode.text);
-          }
-        }
+    // TS: `implements_clause` (nested under `class_heritage`) → its type children.
+    const implementsClause = this.findHeritageClause(node, 'implements_clause');
+    if (implementsClause) {
+      for (const typeNode of implementsClause.namedChildren) {
+        if (this.isTypeNode(typeNode.type)) impls.push(typeNode.text);
       }
     }
 

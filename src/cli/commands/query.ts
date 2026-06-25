@@ -40,7 +40,7 @@ export function runStatus(rootArg: string | undefined): void {
         `symbols ${pct(cov.symbols_embedded, cov.symbols_total)}%  ` +
         `bodies ${pct(cov.symbol_bodies_embedded, cov.symbol_bodies_total)}%`,
     );
-    out(`  semantic-stale files: ${stale}   last indexed: ${project.last_indexed ?? 'never'}`);
+    out(`  semantic-stale files: ${stale}   last indexed: ${stats.last_indexed ?? 'never'}`);
     const cost = db.getCostSummary(project.id);
     if (cost.total_cost_usd > 0) {
       out(

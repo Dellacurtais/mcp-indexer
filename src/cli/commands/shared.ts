@@ -30,8 +30,12 @@ export function log(msg: string): void {
  */
 export function scrubError(msg: string): string {
   return msg
+    // Windows absolute paths (C:\Users\… / D:\MCP\…).
     .replace(/[A-Za-z]:[\\/][^\s"']*/g, '<path>')
-    .replace(/(?:\/[\w.@-]+){2,}/g, '<path>')
+    // POSIX ABSOLUTE paths under known system/home roots only — NOT relative paths.
+    // The old `/(?:\/[\w.@-]+){2,}/` also matched a caller's relative `src/a/b.ts`
+    // (echoed in "file not found" errors), mangling it to "src<path>".
+    .replace(/\/(?:Users|home|root|var|tmp|opt|mnt|private|etc|usr)\/[^\s"')]*/g, '<path>')
     .replace(/@(?:mcp|ctx)\/[\w/-]+/gi, '<module>')
     .replace(/mcp-code-indexer|codestudio/gi, 'code-context');
 }

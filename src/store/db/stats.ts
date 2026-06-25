@@ -23,6 +23,13 @@ export function projectStats(db: DB, centralDb: DB, projectId: number, project: 
   const runCount = centralDb.prepare('SELECT COUNT(*) as cnt FROM runs WHERE project_id = ?')
     .get(projectId) as { cnt: number };
 
+  // Freshness fallback: projects.last_indexed is only written by the (optional)
+  // semantic pass, so on a structural+vector-only index it stays NULL and every
+  // tool reports "never" despite completed runs. Derive it from the latest run.
+  const lastRun = centralDb.prepare(
+    "SELECT MAX(finished_at) as ts FROM runs WHERE project_id = ? AND status = 'completed'",
+  ).get(projectId) as { ts: string | null };
+
   const staleSemantic = db.prepare(`
     SELECT COUNT(*) as cnt FROM files
     WHERE project_id = ? AND (semantic_hash IS NULL OR semantic_hash != content_hash)
@@ -34,7 +41,7 @@ export function projectStats(db: DB, centralDb: DB, projectId: number, project: 
     languages: Object.fromEntries(languages.map(l => [l.language, l.cnt])),
     total_lines: fileCounts.total_lines,
     total_size: fileCounts.total_size,
-    last_indexed: project?.last_indexed ?? null,
+    last_indexed: project?.last_indexed ?? lastRun.ts ?? null,
     structural_indexed_at: project?.structural_indexed_at ?? null,
     semantic_stale_count: staleSemantic.cnt,
     run_count: runCount.cnt,

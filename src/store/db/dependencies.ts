@@ -25,11 +25,44 @@ export function upsert(
     }
 
     for (const dep of externalDeps) {
-      insert.run(projectId, sourceFileId, null, dep, 'external');
+      // A non-relative import can still be PROJECT-INTERNAL via a tsconfig path
+      // alias (e.g. `@ctx/indexer/...` → `src/indexer/...`). Try to resolve it;
+      // only genuinely external packages (no alias match) stay unresolved. This
+      // is what made get_dependents/get_file_structure miss ~73% of edges.
+      const target = resolveDepToFile(db, projectId, dep, sourceFilePath, aliases);
+      insert.run(projectId, sourceFileId, target?.id ?? null, dep, target ? 'internal' : 'external');
     }
   });
 
   tx();
+}
+
+/**
+ * Re-resolve dependency edges left unresolved (target_file_id NULL) at insert
+ * time because the imported file hadn't been indexed yet (forward references).
+ * Run once after the full structural pass, when every file row exists. Genuine
+ * external packages (no alias/relative match) stay NULL. Returns rows fixed.
+ */
+export function resolveUnresolved(db: DB, projectId: number, aliases: PathAlias[]): number {
+  const rows = db.prepare(`
+    SELECT fd.id AS id, fd.import_path AS import_path, sf.path AS source_path
+    FROM file_dependencies fd
+    JOIN files sf ON sf.id = fd.source_file_id
+    WHERE fd.project_id = ? AND fd.target_file_id IS NULL
+  `).all(projectId) as Array<{ id: number; import_path: string; source_path: string }>;
+  const upd = db.prepare("UPDATE file_dependencies SET target_file_id = ?, dep_type = 'internal' WHERE id = ?");
+  let resolved = 0;
+  const tx = db.transaction(() => {
+    for (const r of rows) {
+      const target = resolveDepToFile(db, projectId, r.import_path, r.source_path, aliases);
+      if (target) {
+        upd.run(target.id, r.id);
+        resolved++;
+      }
+    }
+  });
+  tx();
+  return resolved;
 }
 
 export function getDependencies(db: DB, fileId: number): DBFileDependency[] {

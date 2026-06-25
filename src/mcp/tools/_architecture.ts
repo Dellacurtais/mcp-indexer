@@ -71,7 +71,7 @@ export function classifyLayer(path: string, storedLayer?: string): FileLayer {
   // ── data ──
   if (
     role === 'repository' || role === 'model' || role === 'DTO' ||
-    /(repository|entity|dao|dbcontext|context)\.(cs|java|kt|php|rb|go|py|ts|js)$/.test(base) || // UserRepository.cs, AppDbContext.cs
+    /(repository|entity|dao|dbcontext)\.(cs|java|kt|php|rb|go|py|ts|js)$/.test(base) || // UserRepository.cs, AppDbContext.cs (NOT bare context.ts — usually DI/React, not DB)
     /[._-](repository|model|entity|dto|schema|dao|serializer)\.[cm]?[tj]sx?$/.test(base) ||
     /^(models?|schemas?|serializers?|entities)\.py$/.test(base) ||                              // models.py, serializers.py
     /\.sql$/.test(base) ||
@@ -116,7 +116,10 @@ function isEntryName(path: string): boolean {
   const p = path.replace(/\\/g, '/').toLowerCase();
   const base = p.split('/').pop() ?? '';
   return (
-    /^(main|cli|server|bootstrap|program)\.[cm]?[tj]sx?$/.test(base) ||
+    // `bootstrap` removed: */schema/bootstrap.ts is a migration util, not an entry,
+    // and was the only false positive on this repo.
+    /^(main|cli|server|program)\.[cm]?[tj]sx?$/.test(base) ||
+    /(^|\/)(cli|bin)\/index\.[cm]?[tj]sx?$/.test(p) ||        // the real CLI bin entry (not every index.ts)
     /^(main|program)\.(py|go|rs|java|cs|kt)$/.test(base) ||
     base === 'app.module.ts' ||                              // Angular root
     base === 'program.cs' || base === 'startup.cs' || base === 'global.asax' ||  // .NET

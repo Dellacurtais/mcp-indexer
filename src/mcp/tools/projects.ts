@@ -57,13 +57,21 @@ const get_project_overview = defineTool({
     const stats = db.getStats(project.id);
     const concepts = db.listConcepts(project.id);
     const files = db.listFiles(project.id);
-    const archOverview = db.getArchitectureOverview(project.id);
+    // Layers from the same heuristic get_architecture/get_project_pulse use, so all
+    // three orientation tools agree (the stored files.layer column is mostly
+    // 'unknown' until the optional enrichment pass runs).
+    const layerCount = new Map<string, number>();
+    for (const f of files) {
+      const l = classifyLayer(f.path, f.layer);
+      if (l !== 'unknown') layerCount.set(l, (layerCount.get(l) ?? 0) + 1);
+    }
+    const layerEntries = [...layerCount.entries()].sort((a, b) => b[1] - a[1]);
     const compact = args.compact === true;
 
     if (compact) {
       const maxFiles = (args.max_files as number) ?? 50;
       const langs = Object.entries(stats.languages).sort((a, b) => b[1] - a[1]).map(([l, c]) => `${l}(${c})`).join(' ');
-      const layers = archOverview.map(l => `${l.layer}(${l.count})`).join(' ');
+      const layers = layerEntries.map(([l, c]) => `${l}(${c})`).join(' ');
       const conc = concepts.slice(0, 8).map(c => c.concept).join(', ');
       const shownFiles = files.slice(0, maxFiles);
       const fileTrunc = files.length > maxFiles
@@ -76,20 +84,23 @@ const get_project_overview = defineTool({
     const sections = [
       `# ${project.name}`,
       `Path: ${project.root_path}`,
-      `Files: ${stats.file_count} | Symbols: ${stats.symbol_count} | Lines: ${stats.total_lines.toLocaleString()} | Runs: ${stats.run_count}`,
+      `Files: ${stats.file_count} | Symbols: ${stats.symbol_count} | Lines: ${stats.total_lines.toLocaleString('en-US')} | Runs: ${stats.run_count}`,
       `Last Indexed: ${stats.last_indexed ?? 'Never'}`,
       '',
       '## Languages',
       Object.entries(stats.languages).sort((a, b) => b[1] - a[1]).map(([l, c]) => `- ${l}: ${c} files`).join('\n'),
     ];
 
-    if (archOverview.length > 0) {
-      sections.push('', '## Architecture Layers', archOverview.map(l => `- ${l.layer}: ${l.count} files`).join('\n'));
+    if (layerEntries.length > 0) {
+      sections.push('', '## Architecture Layers (heuristic)', layerEntries.map(([l, c]) => `- ${l}: ${c} files`).join('\n'));
     }
     if (concepts.length > 0) {
       sections.push('', '## Key Concepts', concepts.map(c => `- ${c.concept} (${c.count} files)`).join('\n'));
     }
-    sections.push('', '## Files', files.map(f => `- ${f.path} (${f.language}, ${f.line_count} lines, ${f.complexity})`).join('\n'));
+    const maxFiles = (args.max_files as number) ?? 80;
+    const fileList = files.slice(0, maxFiles).map(f => `- ${f.path} (${f.language}, ${f.line_count} lines)`).join('\n')
+      + (files.length > maxFiles ? `\n  ... +${files.length - maxFiles} more — use compact=true or max_files` : '');
+    sections.push('', `## Files (${files.length})`, fileList);
     return truncateToTokens(sections.join('\n'), args.max_tokens as number | undefined);
   }),
 });

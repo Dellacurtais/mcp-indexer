@@ -55,6 +55,17 @@ export interface SearchDiagnostics {
 
 const RRF_K = 60;
 
+/**
+ * Map a 1-based FTS bm25 rank to a gentle, monotonic 0<score<=1 so agents can see
+ * head-vs-tail confidence on FTS-only results. The rows are already bm25-ordered;
+ * previously the score was hardcoded to 0 (rendered "0.000"), discarding the
+ * signal. Only affects un-fused FTS results — RRF fusion re-ranks by position and
+ * overwrites this score, so hybrid mode is unchanged.
+ */
+function ftsScore(rank: number): number {
+  return Math.round((1 / (1 + Math.log2(rank))) * 1000) / 1000;
+}
+
 /** Positive-integer env knob with a fallback (NaN/0/negative → fallback). */
 function envInt(name: string, fallback: number): number {
   const v = Number(process.env[name]);
@@ -391,7 +402,7 @@ export class HybridSearch {
       for (let i = 0; i < matches.length; i++) {
         const file = this.db.getFileById(matches[i].id, projectId);
         if (!file) continue;
-        out.push({ id: file.id, type: 'file', score: 0, fts_rank: i + 1, vector_score: null, data: file });
+        out.push({ id: file.id, type: 'file', score: ftsScore(i + 1), fts_rank: i + 1, vector_score: null, data: file });
       }
       return out;
     } catch {
@@ -430,7 +441,7 @@ export class HybridSearch {
         results.push({
           id: files[i].id,
           type: 'file',
-          score: 0,
+          score: ftsScore(i + 1),
           fts_rank: i + 1,
           vector_score: null,
           data: files[i],
@@ -444,7 +455,7 @@ export class HybridSearch {
         results.push({
           id: symbols[i].id,
           type: 'symbol',
-          score: 0,
+          score: ftsScore(i + 1),
           fts_rank: i + 1,
           vector_score: null,
           data: symbols[i],

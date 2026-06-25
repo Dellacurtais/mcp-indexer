@@ -4,6 +4,36 @@ import type { DB, PathAlias } from './types.js';
 const require = createRequire(import.meta.url);
 
 /**
+ * Strip `//` and block comments from JSONC, but ONLY outside string literals.
+ * A naive block-comment regex corrupts tsconfig path aliases like
+ * `"@ctx/shared/*"` — the slash-star inside the string starts a phantom comment
+ * that eats to the next close marker, breaking JSON.parse. This scanner respects
+ * string literals.
+ */
+function stripJsonc(src: string): string {
+  let out = '';
+  let i = 0;
+  let inStr = false;
+  let strCh = '';
+  while (i < src.length) {
+    const c = src[i];
+    if (inStr) {
+      out += c;
+      if (c === '\\') { out += src[i + 1] ?? ''; i += 2; continue; }
+      if (c === strCh) inStr = false;
+      i++;
+      continue;
+    }
+    if (c === '"' || c === "'") { inStr = true; strCh = c; out += c; i++; continue; }
+    if (c === '/' && src[i + 1] === '/') { i += 2; while (i < src.length && src[i] !== '\n') i++; continue; }
+    if (c === '/' && src[i + 1] === '*') { i += 2; while (i < src.length && !(src[i] === '*' && src[i + 1] === '/')) i++; i += 2; continue; }
+    out += c;
+    i++;
+  }
+  return out;
+}
+
+/**
  * Read tsconfig `compilerOptions.paths` aliases from a project root. Tolerates
  * JSONC (strips comments) because tsconfig.json commonly has them. Silently
  * returns `[]` when missing/unreadable so callers can fall back to relative-only.
@@ -17,10 +47,7 @@ export function loadTsconfigPathAliases(projectRoot: string): PathAlias[] {
     if (!fs.existsSync(p)) continue;
     try {
       const raw = fs.readFileSync(p, 'utf-8');
-      const stripped = raw
-        .replace(/\/\*[\s\S]*?\*\//g, '')
-        .replace(/^\s*\/\/.*$/gm, '');
-      const parsed = JSON.parse(stripped);
+      const parsed = JSON.parse(stripJsonc(raw));
       const paths = parsed?.compilerOptions?.paths;
       const baseUrl: string = parsed?.compilerOptions?.baseUrl ?? '.';
       if (!paths || typeof paths !== 'object') continue;

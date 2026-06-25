@@ -155,6 +155,17 @@ export async function runStructuralIndex(
     treeSitter.dispose();
   }
 
+  // Second pass: re-resolve dependency edges whose target file hadn't been
+  // inserted yet when the importer was processed (forward references) — every
+  // file row now exists. Without this, alias/relative imports to a later-indexed
+  // file stay NULL and get_dependents undercounts cross-file edges.
+  try {
+    const reresolved = db.resolveUnresolvedDeps(projectId);
+    if (reresolved > 0) console.error(`[structural] resolved ${reresolved} forward-ref dependency edge(s)`);
+  } catch (err) {
+    console.error('[structural] dependency re-resolution failed:', err);
+  }
+
   const status = aborted || errorCount > scan.toIndex.length / 2
     ? 'failed'
     : errorCount > 0 ? 'completed_with_errors' : 'completed';

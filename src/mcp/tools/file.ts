@@ -440,17 +440,37 @@ const read_file = defineTool({
     const end = endLine ?? defaultEnd;
     try {
       const slice = readFileSlice(abs, start, end);
-      const numbered = slice.lines.map((l, i) => `${start + i}\t${l}`).join('\n');
-      const remaining = file.line_count - end;
       const ext = filePath.split('.').pop() ?? '';
-      const tag = isAutoFull
+      // Enforce a char budget HERE so the header always reports the range we
+      // actually return. Otherwise force=true builds a [lines 1-867] header and
+      // the generic output cap byte-slices the body, leaving the header lying.
+      const BUDGET = 22_000;
+      let kept = slice.lines;
+      let effEnd = end;
+      let budgetTrimmed = false;
+      let acc = 0;
+      for (let i = 0; i < slice.lines.length; i++) {
+        const rendered = `${start + i}\t${slice.lines[i]}\n`.length;
+        if (acc + rendered > BUDGET && i > 0) {
+          kept = slice.lines.slice(0, i);
+          effEnd = start + i - 1;
+          budgetTrimmed = true;
+          break;
+        }
+        acc += rendered;
+      }
+      const numbered = kept.map((l, i) => `${start + i}\t${l}`).join('\n');
+      const remaining = file.line_count - effEnd;
+      const tag = isAutoFull && !budgetTrimmed
         ? ' [auto-full: file ≤800 lines]'
         : remaining > 0 && file.line_count > AUTO_FULL_THRESHOLD
           ? ' [auto-full off — file > 800 lines, pass force=true to read all]'
           : '';
-      const richHeader = `${filePath} | ${file.line_count} lines | ${ext}${file.layer ? ` | layer=${file.layer}` : ''}\n[lines ${start}-${end}]${tag}\n`;
+      const richHeader = `${filePath} | ${file.line_count} lines | ${ext}${file.layer ? ` | layer=${file.layer}` : ''}\n[lines ${start}-${effEnd}]${tag}\n`;
       const footer = remaining > 0
-        ? `\n... [${remaining} more lines — pass force=true, symbol, around_line, or search_term]`
+        ? budgetTrimmed
+          ? `\n... [${remaining} more lines — output capped; pass start_line=${effEnd + 1} to continue]`
+          : `\n... [${remaining} more lines — pass force=true, symbol, around_line, or search_term]`
         : '';
       return richHeader + headerNote + numbered + footer;
     } catch (e) {

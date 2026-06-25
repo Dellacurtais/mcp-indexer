@@ -815,6 +815,7 @@ export class CodeIndexDB {
   getDependents(projectId: number, fileId: number): DBFileDependent[] { return deps.getDependents(this.idx(projectId), projectId, fileId); }
   getCircularDeps(projectId: number): Array<{ path_a: string; path_b: string }> { return deps.getCircular(this.idx(projectId), projectId); }
   getTopHubs(projectId: number, limit: number): Array<{ path: string; dependents: number }> { return deps.getTopHubs(this.idx(projectId), projectId, limit); }
+  resolveUnresolvedDeps(projectId: number): number { return deps.resolveUnresolved(this.idx(projectId), projectId, this.getAliases(projectId)); }
   /** Invalidate alias cache (e.g. after re-index when tsconfig may have changed). */
   clearAliasCache(projectId?: number): void {
     if (projectId === undefined) this.aliasCache.clear();
