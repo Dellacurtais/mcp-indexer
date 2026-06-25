@@ -2,8 +2,12 @@ node_modules/
 dist/
 *.log
 .DS_Store
+.mcp-indexer/
 .mcp-context/
+.code-context/
 *.db
 *.db-wal
 *.db-shm
+*.tgz
 scripts/_tmp*
+scripts/_*.mjs

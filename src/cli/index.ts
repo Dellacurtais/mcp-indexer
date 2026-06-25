@@ -3,6 +3,7 @@ import { Command } from 'commander';
 import { runIndex } from './commands/index-cmd.js';
 import { runServe } from './commands/serve.js';
 import { runEnrich } from './commands/enrich.js';
+import { runInstall } from './commands/install.js';
 import { runStatus, runSearch, runProjects } from './commands/query.js';
 
 const program = new Command();
@@ -72,6 +73,17 @@ program
       });
     },
   );
+
+program
+  .command('install')
+  .description('Scaffold the Copilot custom-instructions file (.github/copilot-instructions.md) so the agent uses code-context.')
+  .argument('[root]', 'target repo (default: current directory)')
+  .option('--force', 'overwrite existing instruction files')
+  .option('--agents', 'also write a root AGENTS.md (cross-agent standard)')
+  .option('--mcp', 'also write .vscode/mcp.json wiring this build (VS Code)')
+  .action((root: string | undefined, opts: { force?: boolean; agents?: boolean; mcp?: boolean }) => {
+    runInstall(root, { force: !!opts.force, agents: !!opts.agents, mcp: !!opts.mcp });
+  });
 
 program
   .command('status')

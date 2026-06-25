@@ -128,6 +128,7 @@ code-context serve   [repo]             # the MCP server for an editor (omit rep
 code-context status  [repo]             # files / symbols / vector coverage
 code-context search  "<query>" [repo]   # query the index  (--mode, --type, --limit, --lang, --exclude-lang)
 code-context enrich  [repo]             # OPTIONAL paid LLM pass (AWS Bedrock) — see below
+code-context install [repo]             # scaffold .github/copilot-instructions.md  (--mcp, --agents, --force)
 code-context projects                   # list every indexed project
 ```
 
@@ -314,16 +315,21 @@ add the **explicit absolute path** as the last arg: `"serve", "D:/abs/path/to/yo
 ## Agent skill — make Copilot use it
 
 The server ships a usage guide in its MCP handshake (`instructions`), but to make the agent *reach
-for* these tools, add repository **custom instructions** — the "skill" Copilot honors in VS Code
-and JetBrains:
+for* these tools, add repository **custom instructions** — the "skill" Copilot honors in VS Code,
+JetBrains and github.com. The canonical file is `.github/copilot-instructions.md` (read on every
+Copilot chat/agent request). Scaffold it with one command from inside your repo:
 
 ```bash
-cp /abs/path/to/code-context/templates/copilot-instructions.md  <your-repo>/.github/copilot-instructions.md
+code-context install                 # writes <repo>/.github/copilot-instructions.md
+code-context install --mcp           # …and .vscode/mcp.json wiring this build (VS Code)
+code-context install --agents        # …and a root AGENTS.md (cross-agent standard)
+# --force overwrites an existing file; pass a path to target another repo.
 ```
 
-(JetBrains also picks up nested `AGENTS.md` / `CLAUDE.md` via Settings → GitHub Copilot →
-Customizations.) The template tells the agent to call `pack_context`/`search`/etc. to ground its
-work before guessing or reading whole files.
+The instructions tell the agent to call `pack_context`/`search`/etc. to ground its work before
+guessing or reading whole files. (Prefer `.github/copilot-instructions.md`; `AGENTS.md` is the
+emerging cross-tool standard and coexists with it — JetBrains also reads nested `AGENTS.md` /
+`CLAUDE.md` via Settings → GitHub Copilot → Customizations.)
 
 ---
 

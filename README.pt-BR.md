@@ -132,6 +132,7 @@ code-context serve   [repo]             # o servidor MCP para o editor (omita o 
 code-context status  [repo]             # arquivos / símbolos / cobertura de vetores
 code-context search  "<query>" [repo]   # consulta o índice  (--mode, --type, --limit, --lang, --exclude-lang)
 code-context enrich  [repo]             # passo LLM PAGO opcional (AWS Bedrock) — veja abaixo
+code-context install [repo]             # cria .github/copilot-instructions.md  (--mcp, --agents, --force)
 code-context projects                   # lista todos os projetos indexados
 ```
 
@@ -320,15 +321,21 @@ não expõem roots), adicione o **caminho absoluto explícito** como último arg
 
 O servidor já entrega um guia de uso no handshake MCP (`instructions`), mas para o agente
 *recorrer* a essas ferramentas, adicione **custom instructions** no repositório — a "skill" que o
-Copilot honra no VS Code e no JetBrains:
+Copilot honra no VS Code, JetBrains e github.com. O arquivo canônico é
+`.github/copilot-instructions.md` (lido em toda request de chat/agente). Crie com um comando, de
+dentro do seu repo:
 
 ```bash
-cp /caminho/abs/para/code-context/templates/copilot-instructions.md  <seu-repo>/.github/copilot-instructions.md
+code-context install                 # escreve <repo>/.github/copilot-instructions.md
+code-context install --mcp           # …e .vscode/mcp.json apontando pra este build (VS Code)
+code-context install --agents        # …e um AGENTS.md na raiz (padrão cross-agent)
+# --force sobrescreve um arquivo existente; passe um caminho para mirar outro repo.
 ```
 
-(O JetBrains também lê `AGENTS.md` / `CLAUDE.md` aninhados via Settings → GitHub Copilot →
-Customizations.) O template diz ao agente para chamar `pack_context`/`search`/etc. para fundamentar
-o trabalho antes de adivinhar ou ler arquivos inteiros.
+As instruções dizem ao agente para chamar `pack_context`/`search`/etc. para fundamentar o trabalho
+antes de adivinhar ou ler arquivos inteiros. (Prefira `.github/copilot-instructions.md`; o
+`AGENTS.md` é o padrão cross-tool emergente e coexiste com ele — o JetBrains também lê `AGENTS.md` /
+`CLAUDE.md` aninhados via Settings → GitHub Copilot → Customizations.)
 
 ---
 
