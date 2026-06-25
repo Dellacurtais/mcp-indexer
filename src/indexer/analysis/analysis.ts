@@ -73,7 +73,7 @@ function parseAnalysisJson(text: string): { summary: string; concepts: string[];
   return { summary: summary.slice(0, 200), concepts, layer };
 }
 
-function priceFor(model: string): { inPerMTok: number; outPerMTok: number } {
+export function priceFor(model: string): { inPerMTok: number; outPerMTok: number } {
   const m = model.toLowerCase();
   if (m.includes('titan-text-lite')) return { inPerMTok: 0.15, outPerMTok: 0.2 };
   if (m.includes('titan-text-express')) return { inPerMTok: 0.2, outPerMTok: 0.6 };

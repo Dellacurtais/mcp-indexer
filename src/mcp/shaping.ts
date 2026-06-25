@@ -66,6 +66,39 @@ export const DEFAULT_ALLOWLIST: readonly string[] = [
   'reindex',
 ];
 
+/**
+ * Lean default surface — one high-value tool per stage of the orient→search→drill
+ * →navigate→graph flow. Agents (Copilot especially) pick tools more accurately
+ * from a small, well-named set; the full surface is opt-in via `MCP_TOOLS=full`.
+ */
+export const CORE_ALLOWLIST: readonly string[] = [
+  'pack_context',
+  'get_project_pulse',
+  'get_architecture',
+  'search',
+  'grep_code',
+  'get_file_skeleton',
+  'read_file',
+  'find_references',
+  'get_symbol_body',
+  'get_dependencies',
+  'reindex',
+];
+
+/**
+ * Which tools `serve` advertises. `MCP_TOOLS`: unset/`core` → CORE_ALLOWLIST;
+ * `full`/`all` → the whole read-only surface; or a comma list of exact tool
+ * names (intersected with the known set).
+ */
+export function resolveAllowlist(env: NodeJS.ProcessEnv = process.env): readonly string[] {
+  const raw = (env.MCP_TOOLS ?? '').trim().toLowerCase();
+  if (!raw || raw === 'core') return CORE_ALLOWLIST;
+  if (raw === 'full' || raw === 'all') return DEFAULT_ALLOWLIST;
+  const known = new Set(DEFAULT_ALLOWLIST);
+  const picked = raw.split(',').map((s) => s.trim()).filter((s) => known.has(s));
+  return picked.length ? picked : CORE_ALLOWLIST;
+}
+
 export interface ShapeOptions {
   level?: ToolOutputCapLevel;
   /** Injected as `project_name` when a tool declares that input and the caller omits it. */
@@ -82,7 +115,7 @@ export function shapeRegistry(
   opts: ShapeOptions = {},
 ): Map<string, McpTool> {
   const level = resolveCapLevel(opts.level);
-  const allow = new Set(opts.allowlist ?? DEFAULT_ALLOWLIST);
+  const allow = new Set(opts.allowlist ?? resolveAllowlist());
   const out = new Map<string, McpTool>();
   for (const [name, tool] of registry) {
     if (!allow.has(name)) continue;

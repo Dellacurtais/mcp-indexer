@@ -81,8 +81,9 @@ program
   .option('--force', 'overwrite existing instruction files')
   .option('--agents', 'also write a root AGENTS.md (cross-agent standard)')
   .option('--mcp', 'also write .vscode/mcp.json wiring this build (VS Code)')
-  .action((root: string | undefined, opts: { force?: boolean; agents?: boolean; mcp?: boolean }) => {
-    runInstall(root, { force: !!opts.force, agents: !!opts.agents, mcp: !!opts.mcp });
+  .option('--index', 'also build the index now (so the agent can use it immediately)')
+  .action(async (root: string | undefined, opts: { force?: boolean; agents?: boolean; mcp?: boolean; index?: boolean }) => {
+    await runInstall(root, { force: !!opts.force, agents: !!opts.agents, mcp: !!opts.mcp, index: !!opts.index });
   });
 
 program

@@ -3,14 +3,25 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "packageManager": "pnpm@10.22.0",
   "description": "Local code-context server — indexes a repo and serves dense retrieval tools over MCP.",
   "bin": {
     "code-context": "./dist/cli/index.js"
   },
+  "files": [
+    "dist",
+    "templates",
+    ".env.example",
+    "README.md",
+    "README.pt-BR.md"
+  ],
   "scripts": {
     "build": "tsc && tsc-alias",
     "typecheck": "tsc --noEmit",
-    "dev": "tsx src/cli/index.ts"
+    "dev": "tsx src/cli/index.ts",
+    "pretest": "pnpm build",
+    "test": "node --test scripts/smoke.test.mjs",
+    "prepublishOnly": "pnpm build"
   },
   "dependencies": {
     "@huggingface/transformers": "^4.2.0",

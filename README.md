@@ -154,6 +154,12 @@ code-context projects                   # list every indexed project
   `--no-watch`).
 - **`--no-embeddings`** skips the ONNX model entirely — you still get tree-sitter symbols + FTS
   (grep/skeleton/structure work), just no semantic vector search.
+- **What's ignored** — `node_modules`, `.git`, build output (`dist`, `build`, `target`, `obj`, `.vs`,
+  `.angular`, …), the repo's root `.gitignore`, and binaries, all automatically. Add a
+  **`.mcpindexignore`** file at the repo root (same syntax as `.gitignore`) for project-specific rules.
+- **Offline / air-gapped** — the embedding model (~100 MB) downloads on first index to
+  `~/.mcp/models`. Pre-seed it (copy the cache, or set `MCP_MODEL_CACHE_DIR` to a shared location) to
+  index with embeddings without network access.
 
 ---
 
@@ -252,6 +258,7 @@ server too — no credentials in the editor launcher config.
 |---|---|---|
 | `MCP_SERVER_NAME` | `code-context` | Name shown to the MCP client in the handshake |
 | `MCP_OUTPUT_CAP_LEVEL` | `economic` | Output density: `economic` → `ultra` |
+| `MCP_TOOLS` | `core` | Tool surface: `core` (~11, leaner = better agent tool-selection), `full` (all 24), or a comma list of tool names |
 | `MCP_DATA_DIR` | `~/.code-context` | Index DB + global `.env` location |
 | `MCP_MODEL_CACHE_DIR` | `~/.mcp/models` | Local ONNX model cache |
 | `MCP_EMBEDDING_MODEL` | `Xenova/multilingual-e5-small` | Local embedding model |
@@ -321,7 +328,7 @@ Copilot chat/agent request). Scaffold it with one command from inside your repo:
 
 ```bash
 code-context install                 # writes <repo>/.github/copilot-instructions.md
-code-context install --mcp           # …and .vscode/mcp.json wiring this build (VS Code)
+code-context install --mcp --index   # …and .vscode/mcp.json + build the index now (one-shot setup)
 code-context install --agents        # …and a root AGENTS.md (cross-agent standard)
 # --force overwrites an existing file; pass a path to target another repo.
 ```
@@ -347,7 +354,9 @@ emerging cross-tool standard and coexists with it — JetBrains also reads neste
 | Graph | `get_dependencies`, `get_dependents` |
 | Index | `reindex` (agent-triggered build/refresh from chat — no terminal needed) |
 
-All results are dense Markdown; pass `--lang`/`--exclude-lang` (search) to cut noise.
+By default `serve` advertises a **lean core** (~11 tools) — agents pick tools more accurately from a
+small set. Set `MCP_TOOLS=full` for the whole table above, or `MCP_TOOLS=search,read_file,…` for a
+custom subset. All results are dense Markdown; pass `--lang`/`--exclude-lang` (search) to cut noise.
 
 ---
 

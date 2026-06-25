@@ -10,7 +10,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { disposeIndexerProcessResources } from '@ctx/indexer/bootstrap/dispose.js';
-import { createAnalysisService } from '@ctx/indexer/analysis/analysis.js';
+import { createAnalysisService, priceFor } from '@ctx/indexer/analysis/analysis.js';
 import { classifyLayer } from '../../mcp/tools/_architecture.js';
 import { resolveRoot, openProject, log } from './shared.js';
 
@@ -54,7 +54,16 @@ export async function runEnrich(rootArg: string | undefined, opts: EnrichOpts): 
     }
 
     if (opts.dryRun) {
-      log(`would enrich ${targets.length} file(s), ranked by in-degree:`);
+      const model = opts.model ?? process.env.CODE_CONTEXT_ANALYSIS_MODEL ?? 'amazon.titan-text-express-v1';
+      const price = priceFor(model);
+      let estIn = 0;
+      let estOut = 0;
+      for (const t of targets) {
+        estIn += Math.min(t.line_count * 50, MAX_CHARS) / 4 + 90; // file chars/4 + system prompt
+        estOut += 150; // summary + concepts + layer JSON
+      }
+      const estUsd = (estIn / 1e6) * price.inPerMTok + (estOut / 1e6) * price.outPerMTok;
+      log(`would enrich ${targets.length} file(s) with ${model} — est. ~$${estUsd.toFixed(4)} (rough), ranked by in-degree:`);
       for (const t of targets.slice(0, 40)) out(`  ${String(t.indegree).padStart(4)}↑  ${t.path}`);
       if (targets.length > 40) out(`  … +${targets.length - 40} more`);
       return;

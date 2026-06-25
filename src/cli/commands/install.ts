@@ -10,6 +10,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolveRoot, log } from './shared.js';
+import { runIndex } from './index-cmd.js';
 
 // dist/cli/commands/install.js (or src/cli/commands/install.ts under tsx) →
 // package root is three levels up (commands → cli → dist → root).
@@ -45,6 +46,7 @@ export interface InstallOpts {
   force?: boolean;
   agents?: boolean;
   mcp?: boolean;
+  index?: boolean;
 }
 
 function loadTemplate(): string {
@@ -64,7 +66,7 @@ function writeIfAbsent(path: string, content: string, force: boolean, label: str
   log(`${existsSync(path) && force ? 'overwrote' : 'wrote'} ${label}`);
 }
 
-export function runInstall(rootArg: string | undefined, opts: InstallOpts): void {
+export async function runInstall(rootArg: string | undefined, opts: InstallOpts): Promise<void> {
   const root = resolveRoot(rootArg ?? process.cwd());
   const instructions = loadTemplate();
   const serveEntry = join(PKG_ROOT, 'dist', 'cli', 'index.js').replace(/\\/g, '/');
@@ -103,15 +105,21 @@ export function runInstall(rootArg: string | undefined, opts: InstallOpts): void
     writeIfAbsent(join(vscodeDir, 'mcp.json'), mcpJson, !!opts.force, '.vscode/mcp.json');
   }
 
+  if (opts.index) {
+    log('');
+    log('indexing (first run downloads the local embedding model ~100MB) …');
+    await runIndex(root, { noEmbeddings: false });
+  }
+
   log('');
   log('Next steps:');
-  log(`  1. Index the repo:   code-context index "${root}"`);
+  if (!opts.index) log(`  • Index the repo:   code-context index "${root}"`);
   if (!opts.mcp) {
-    log('  2. Configure the MCP server in your editor:');
+    log('  • Configure the MCP server in your editor:');
     log('       VS Code   → re-run with --mcp, or add .vscode/mcp.json');
     log(`       JetBrains → ~/.config/github-copilot/intellij/mcp.json → "args": ["${serveEntry}", "serve"]`);
   } else {
-    log(`  2. JetBrains too? add to ~/.config/github-copilot/intellij/mcp.json → "args": ["${serveEntry}", "serve"]`);
+    log(`  • JetBrains too? add to ~/.config/github-copilot/intellij/mcp.json → "args": ["${serveEntry}", "serve"]`);
   }
-  log('  3. Open Copilot Chat in AGENT mode (the tools are hidden in Ask/Edit).');
+  log('  • Open Copilot Chat in AGENT mode (the tools are hidden in Ask/Edit).');
 }

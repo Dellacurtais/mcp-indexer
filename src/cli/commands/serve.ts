@@ -23,7 +23,7 @@ import {
 import type { FileWatcherService } from '@ctx/services/services/watcher.js';
 import { disposeIndexerProcessResources } from '@ctx/indexer/bootstrap/dispose.js';
 import { buildToolRegistry } from '../../mcp/tools/index.js';
-import { shapeRegistry, DEFAULT_ALLOWLIST } from '../../mcp/shaping.js';
+import { shapeRegistry, resolveAllowlist } from '../../mcp/shaping.js';
 import { SERVER_INSTRUCTIONS } from '../../mcp/instructions.js';
 import type { McpTool } from '../../mcp/tool.js';
 import type { ToolContext } from '../../mcp/context.js';
@@ -60,7 +60,7 @@ async function rootFromClientRoots(server: Server): Promise<string | null> {
 
 export async function runServe(rootArg: string | undefined, opts: ServeOpts): Promise<void> {
   const base = buildToolRegistry();
-  const allowed = new Set(DEFAULT_ALLOWLIST);
+  const allowed = new Set(resolveAllowlist());
   // Static tool defs (allowlisted) — returned for ListTools without needing the
   // project resolved yet, so the handshake/tool-list never blocks.
   const staticDefs = [...base.values()]

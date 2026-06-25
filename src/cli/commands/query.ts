@@ -41,6 +41,13 @@ export function runStatus(rootArg: string | undefined): void {
         `bodies ${pct(cov.symbol_bodies_embedded, cov.symbol_bodies_total)}%`,
     );
     out(`  semantic-stale files: ${stale}   last indexed: ${project.last_indexed ?? 'never'}`);
+    const cost = db.getCostSummary(project.id);
+    if (cost.total_cost_usd > 0) {
+      out(
+        `  enrich (LLM) cost: $${cost.total_cost_usd.toFixed(4)}` +
+          (cost.llm_analysis_cost_usd ? ` (analysis $${cost.llm_analysis_cost_usd.toFixed(4)})` : ''),
+      );
+    }
   } finally {
     db.close();
   }
@@ -118,16 +125,17 @@ export async function runSearch(
       out('No results.');
       return;
     }
-    for (const r of results) {
+    results.forEach((r, i) => {
       const d = r.data as unknown as Record<string, unknown>;
+      // Show the rerank/RRF score when meaningful; FTS-only matches score 0, so
+      // fall back to the 1-based rank instead of a noisy "[0.00]".
+      const tag = r.score > 0 ? `[${r.score.toFixed(2)}]` : `#${i + 1}`;
       if (r.type === 'file') {
-        out(`[file]   ${String(d.path)}  (${String(d.language)})  [${r.score.toFixed(2)}]`);
+        out(`[file]   ${String(d.path)}  (${String(d.language)})  ${tag}`);
       } else {
-        out(
-          `[symbol] ${String(d.file_path)}:${d.line ?? '?'}  ${String(d.kind)} ${String(d.name)}  [${r.score.toFixed(2)}]`,
-        );
+        out(`[symbol] ${String(d.file_path)}:${d.line ?? '?'}  ${String(d.kind)} ${String(d.name)}  ${tag}`);
       }
-    }
+    });
   } catch (e) {
     log(`search error: ${e instanceof Error ? e.message : String(e)}`);
   } finally {

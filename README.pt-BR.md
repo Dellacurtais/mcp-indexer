@@ -157,6 +157,12 @@ home / a raiz do drive são recusadas). Todos os projetos compartilham um índic
   O `serve` roda o mesmo watcher in-process durante a sessão do editor (desligue com `--no-watch`).
 - **`--no-embeddings`** pula o modelo ONNX por completo — você ainda tem símbolos do tree-sitter +
   FTS (grep/skeleton/structure funcionam), só sem busca vetorial semântica.
+- **O que é ignorado** — `node_modules`, `.git`, saída de build (`dist`, `build`, `target`, `obj`,
+  `.vs`, `.angular`, …), o `.gitignore` da raiz e binários, tudo automático. Adicione um
+  **`.mcpindexignore`** na raiz (mesma sintaxe do `.gitignore`) para regras por-projeto.
+- **Offline / air-gapped** — o modelo de embedding (~100 MB) baixa no 1º index para `~/.mcp/models`.
+  Pré-semeie (copie o cache, ou aponte `MCP_MODEL_CACHE_DIR` para um local compartilhado) para indexar
+  com embeddings sem acesso à rede.
 
 ---
 
@@ -256,6 +262,7 @@ do editor — sem credenciais na config do launcher.
 |---|---|---|
 | `MCP_SERVER_NAME` | `code-context` | Nome mostrado ao cliente MCP no handshake |
 | `MCP_OUTPUT_CAP_LEVEL` | `economic` | Densidade da saída: `economic` → `ultra` |
+| `MCP_TOOLS` | `core` | Superfície de tools: `core` (~11, menos = o agente escolhe melhor), `full` (todas as 24), ou uma lista separada por vírgula |
 | `MCP_DATA_DIR` | `~/.code-context` | Local do índice + `.env` global |
 | `MCP_MODEL_CACHE_DIR` | `~/.mcp/models` | Cache de modelos ONNX locais |
 | `MCP_EMBEDDING_MODEL` | `Xenova/multilingual-e5-small` | Modelo de embedding local |
@@ -327,7 +334,7 @@ dentro do seu repo:
 
 ```bash
 code-context install                 # escreve <repo>/.github/copilot-instructions.md
-code-context install --mcp           # …e .vscode/mcp.json apontando pra este build (VS Code)
+code-context install --mcp --index   # …e .vscode/mcp.json + já constrói o índice (setup de uma vez)
 code-context install --agents        # …e um AGENTS.md na raiz (padrão cross-agent)
 # --force sobrescreve um arquivo existente; passe um caminho para mirar outro repo.
 ```
@@ -353,6 +360,8 @@ antes de adivinhar ou ler arquivos inteiros. (Prefira `.github/copilot-instructi
 | Grafo | `get_dependencies`, `get_dependents` |
 | Índice | `reindex` (disparado pelo agente: constrói/atualiza o índice pelo chat — sem terminal) |
 
+Por padrão o `serve` expõe um **core enxuto** (~11 tools) — o agente escolhe melhor num conjunto
+pequeno. Use `MCP_TOOLS=full` para a tabela inteira, ou `MCP_TOOLS=search,read_file,…` para um subset.
 Todos os resultados são Markdown denso; use `--lang`/`--exclude-lang` (no search) para cortar ruído.
 
 ---
