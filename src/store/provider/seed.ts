@@ -25,6 +25,25 @@ export function seedFromEnvIfEmpty(db: DB): void {
 function seedReranker(db: DB, env: NodeJS.ProcessEnv): void {
   if (reranker.list(db).length > 0) return; // operator already configured one
 
+  // Explicit choice via env (the store config wins over the createReranker env
+  // fallbacks, so this must be seeded here to actually take effect).
+  const choice = (env.CODE_CONTEXT_RERANK ?? '').trim().toLowerCase();
+  if (choice === 'none' || choice === 'off' || choice === 'null') {
+    // RRF-only, NO local ONNX reranker download. Seed nothing → NullReranker.
+    return;
+  }
+  if (choice === 'bedrock') {
+    reranker.upsert(db, {
+      id: 'bedrock',
+      kind: 'bedrock',
+      name: 'AWS Bedrock Rerank',
+      enabled: true,
+      is_default: true,
+      config: { model: env.CODE_CONTEXT_RERANK_MODEL ?? 'amazon.rerank-v1:0', region: env.AWS_REGION },
+    });
+    return;
+  }
+
   if (env.COHERE_API_KEY) {
     reranker.upsert(db, {
       id: 'cohere',

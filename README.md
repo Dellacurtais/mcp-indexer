@@ -268,7 +268,7 @@ server too — no credentials in the editor launcher config.
 | `CODE_CONTEXT_ANALYSIS` | — | `bedrock` or `mock` — enables the `enrich` provider |
 | `CODE_CONTEXT_ANALYSIS_MODEL` | `amazon.titan-text-express-v1` | Bedrock model id |
 | `CODE_CONTEXT_ANALYSIS_INFERENCE` | — | `1` → prepend the region inference-profile prefix |
-| `CODE_CONTEXT_RERANK` | — | `bedrock` → use a Bedrock rerank model instead of the local ONNX one |
+| `CODE_CONTEXT_RERANK` | — | reranker backend: `bedrock` (Bedrock model), `none` (RRF-only — disables the **local ONNX reranker**, for a no-ONNX setup); unset = local ONNX |
 | `CODE_CONTEXT_RERANK_MODEL` | `amazon.rerank-v1:0` | Bedrock rerank model id (or `cohere.rerank-v3-5:0` / a full ARN) |
 | `AWS_REGION` / `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_SESSION_TOKEN` | — | Bedrock credentials (or use `~/.aws`, SSO, instance role) |
 | `MCP_INDEX_WORKER_URL` | — | Optional remote embeddings (Cloudflare) instead of local |
