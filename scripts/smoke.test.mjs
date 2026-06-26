@@ -67,7 +67,7 @@ test('index + serve + core tools', async (t) => {
   await withServer(env, async (client) => {
     const names = (await client.listTools()).tools.map((x) => x.name);
     assert.equal(names.length, 13, `expected 13 core tools, got ${names.length}: ${names.join(',')}`);
-    for (const tool of ['pack_context', 'search', 'get_file_skeleton', 'read_file', 'reindex', 'explore', 'explore_result']) {
+    for (const tool of ['pack_context', 'search', 'get_file_skeleton', 'read_file', 'reindex', 'agent_explore', 'agent_explore_result']) {
       assert.ok(names.includes(tool), `missing core tool ${tool}`);
     }
     assert.ok(!names.includes('exec_command'), 'exec must be hidden by default');
@@ -80,9 +80,9 @@ test('index + serve + core tools', async (t) => {
     const sr = await client.callTool({ name: 'search', arguments: { query: 'authentication login' } });
     assert.match(sr.content?.[0]?.text ?? '', /auth\.service\.ts/, 'search finds auth.service.ts');
 
-    // explore is advertised and degrades gracefully when no model is configured.
-    const ex = await client.callTool({ name: 'explore', arguments: { task: 'where is login handled' } });
-    assert.match(ex.content?.[0]?.text ?? '', /no explorer model configured|not connected/, 'explore degrades gracefully');
+    // agent_explore is advertised and degrades gracefully when no model is configured.
+    const ex = await client.callTool({ name: 'agent_explore', arguments: { task: 'where is login handled' } });
+    assert.match(ex.content?.[0]?.text ?? '', /no explorer model configured|not connected/, 'agent_explore degrades gracefully');
   });
 });
 

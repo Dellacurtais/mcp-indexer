@@ -283,7 +283,7 @@ server too — no credentials in the editor launcher config.
 | `MCP_OUTPUT_CAP_LEVEL` | `economic` | Output density: `economic` → `ultra` |
 | `MCP_TOOLS` | `core` | Read-only tool surface: `core` (~12, leaner = better agent tool-selection), `full` (all read-only), or a comma list of tool names |
 | `MCP_EXEC` | — | `1` adds the opt-in `exec_command`/`write_stdin`/`list_sessions` shell tools ON TOP of the read-only set (never replaces them). Use only in trusted projects |
-| `CODE_CONTEXT_EXPLORER_PROVIDER` / `_MODEL` / `_INFERENCE` | enrich backend | Provider+model for the `explore` sub-agent (set in the dashboard). Bounds: `MCP_EXPLORE_MAX_CALLS`/`_BUDGET`/`_TIMEOUT_MS`. `MCP_EXPLORE_POLL_MS` (20000) = how long each `explore`/`explore_result` call blocks — keep under your MCP client's timeout; raise it (if your client allows) for fewer polls |
+| `CODE_CONTEXT_EXPLORER_PROVIDER` / `_MODEL` / `_INFERENCE` | enrich backend | Provider+model for the `agent_explore` sub-agent (set in the dashboard). Bounds: `MCP_EXPLORE_MAX_CALLS`/`_BUDGET`/`_TIMEOUT_MS`. `MCP_EXPLORE_POLL_MS` (20000) = how long each `agent_explore`/`agent_explore_result` call blocks — keep under your MCP client's timeout; raise it (if your client allows) for fewer polls |
 | `MCP_DATA_DIR` | `~/.code-context` | Index DB + global `.env` location |
 | `MCP_MODEL_CACHE_DIR` | `~/.mcp/models` | Local ONNX model cache |
 | `MCP_EMBEDDING_MODEL` | `Xenova/multilingual-e5-small` | Local embedding model |
@@ -379,7 +379,7 @@ emerging cross-tool standard and coexists with it — JetBrains also reads neste
 | File / outline | `get_file_skeleton`, `get_file_structure`, `read_file`, `list_directory` |
 | Symbols | `find_references`, `get_symbol_body`, `get_class_members`, `get_hierarchy`, `find_implementations`, `prepare_edit` |
 | Graph | `get_dependencies`, `get_dependents` |
-| Explore | `explore` / `explore_result` — delegate a "find/understand/where" investigation to a CHEAP model (set in the dashboard). It runs a no-turn-limit read-only loop and returns a FULL, uncapped markdown report (files+lines, symbols, snippets, deps), so the expensive model spends no tokens exploring. Runs in the BACKGROUND: `explore` returns the report if it finishes fast, else a job id — poll it with `explore_result` (each call long-polls under the client timeout) |
+| Explore | `agent_explore` / `agent_explore_result` — delegate a "find/understand/where" investigation to a CHEAP sub-agent model (set in the dashboard). It runs a no-turn-limit read-only loop and returns a FULL, uncapped markdown report (files+lines, symbols, snippets, deps), so the expensive model spends no tokens exploring. Runs in the BACKGROUND: `agent_explore` returns the report if it finishes fast, else a job id — poll it with `agent_explore_result` (each call long-polls under the client timeout) |
 | Index | `reindex` (agent-triggered build/refresh from chat — no terminal needed) |
 
 By default `serve` advertises a **lean core** (~12 tools) — agents pick tools more accurately from a

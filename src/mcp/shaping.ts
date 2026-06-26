@@ -64,8 +64,8 @@ export const DEFAULT_ALLOWLIST: readonly string[] = [
   'get_dependencies',
   'get_dependents',
   'pack_context',
-  'explore',
-  'explore_result',
+  'agent_explore',
+  'agent_explore_result',
   'reindex',
 ];
 
@@ -85,8 +85,8 @@ export const CORE_ALLOWLIST: readonly string[] = [
   'find_references',
   'get_symbol_body',
   'get_dependencies',
-  'explore',
-  'explore_result',
+  'agent_explore',
+  'agent_explore_result',
   'reindex',
 ];
 

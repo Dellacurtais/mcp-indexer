@@ -304,7 +304,7 @@ do editor — sem credenciais na config do launcher.
 | `MCP_OUTPUT_CAP_LEVEL` | `economic` | Densidade da saída: `economic` → `ultra` |
 | `MCP_TOOLS` | `core` | Superfície somente-leitura: `core` (~12, menos = o agente escolhe melhor), `full` (todas), ou uma lista separada por vírgula |
 | `MCP_EXEC` | — | `1` adiciona as tools opt-in `exec_command`/`write_stdin`/`list_sessions` POR CIMA das somente-leitura (nunca as substitui). Só em projetos confiáveis |
-| `CODE_CONTEXT_EXPLORER_PROVIDER` / `_MODEL` / `_INFERENCE` | backend do enrich | Provider+modelo do sub-agente `explore` (defina no painel). Limites: `MCP_EXPLORE_MAX_CALLS`/`_BUDGET`/`_TIMEOUT_MS` |
+| `CODE_CONTEXT_EXPLORER_PROVIDER` / `_MODEL` / `_INFERENCE` | backend do enrich | Provider+modelo do sub-agente `agent_explore` (defina no painel). Limites: `MCP_EXPLORE_MAX_CALLS`/`_BUDGET`/`_TIMEOUT_MS` |
 | `MCP_DATA_DIR` | `~/.code-context` | Local do índice + `.env` global |
 | `MCP_MODEL_CACHE_DIR` | `~/.mcp/models` | Cache de modelos ONNX locais |
 | `MCP_EMBEDDING_MODEL` | `Xenova/multilingual-e5-small` | Modelo de embedding local |
@@ -402,7 +402,7 @@ antes de adivinhar ou ler arquivos inteiros. (Prefira `.github/copilot-instructi
 | Arquivo / outline | `get_file_skeleton`, `get_file_structure`, `read_file`, `list_directory` |
 | Símbolos | `find_references`, `get_symbol_body`, `get_class_members`, `get_hierarchy`, `find_implementations`, `prepare_edit` |
 | Grafo | `get_dependencies`, `get_dependents` |
-| Explorar | `explore` / `explore_result` — delega uma investigação ("ache/entenda/onde") a um modelo BARATO (definido no painel). Roda um loop somente-leitura sem limite de turnos e devolve um relatório markdown COMPLETO e sem cap (arquivos+linhas, símbolos, trechos, deps), pra o modelo caro não gastar token. Roda em BACKGROUND: o `explore` devolve o relatório se terminar rápido, senão um job id — consulte com `explore_result` (cada chamada faz long-poll abaixo do timeout do cliente) |
+| Explorar | `agent_explore` / `agent_explore_result` — delega uma investigação ("ache/entenda/onde") a um SUB-AGENTE com modelo BARATO (definido no painel). Roda um loop somente-leitura sem limite de turnos e devolve um relatório markdown COMPLETO e sem cap (arquivos+linhas, símbolos, trechos, deps), pra o modelo caro não gastar token. Roda em BACKGROUND: o `agent_explore` devolve o relatório se terminar rápido, senão um job id — consulte com `agent_explore_result` (cada chamada faz long-poll abaixo do timeout do cliente) |
 | Índice | `reindex` (disparado pelo agente: constrói/atualiza o índice pelo chat — sem terminal) |
 
 Por padrão o `serve` expõe um **core enxuto** (~12 tools) — o agente escolhe melhor num conjunto
