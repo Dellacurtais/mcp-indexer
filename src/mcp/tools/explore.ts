@@ -40,9 +40,16 @@ let jobCounter = 0;
 const JOB_TTL_MS = 15 * 60 * 1000;
 const MAX_JOBS = 30;
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+/**
+ * How long a single explore / explore_result call blocks waiting for the job.
+ * MUST stay comfortably UNDER the MCP client's per-call timeout (commonly 30-60s)
+ * so the call RETURNS a "still running, call again" message instead of the client
+ * aborting it (-32001). Default 20s; raise MCP_EXPLORE_POLL_MS if your client
+ * allows a longer timeout (fewer polls = cheaper).
+ */
 const pollWindowMs = (): number => {
   const n = parseInt(process.env.MCP_EXPLORE_POLL_MS ?? '', 10);
-  return Number.isFinite(n) && n > 0 ? n : 45_000;
+  return Number.isFinite(n) && n > 0 ? n : 20_000;
 };
 
 function reapJobs(): void {

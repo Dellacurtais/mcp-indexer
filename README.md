@@ -283,7 +283,7 @@ server too — no credentials in the editor launcher config.
 | `MCP_OUTPUT_CAP_LEVEL` | `economic` | Output density: `economic` → `ultra` |
 | `MCP_TOOLS` | `core` | Read-only tool surface: `core` (~12, leaner = better agent tool-selection), `full` (all read-only), or a comma list of tool names |
 | `MCP_EXEC` | — | `1` adds the opt-in `exec_command`/`write_stdin`/`list_sessions` shell tools ON TOP of the read-only set (never replaces them). Use only in trusted projects |
-| `CODE_CONTEXT_EXPLORER_PROVIDER` / `_MODEL` / `_INFERENCE` | enrich backend | Provider+model for the `explore` sub-agent (set in the dashboard). Bounds: `MCP_EXPLORE_MAX_CALLS`/`_BUDGET`/`_TIMEOUT_MS` |
+| `CODE_CONTEXT_EXPLORER_PROVIDER` / `_MODEL` / `_INFERENCE` | enrich backend | Provider+model for the `explore` sub-agent (set in the dashboard). Bounds: `MCP_EXPLORE_MAX_CALLS`/`_BUDGET`/`_TIMEOUT_MS`. `MCP_EXPLORE_POLL_MS` (20000) = how long each `explore`/`explore_result` call blocks — keep under your MCP client's timeout; raise it (if your client allows) for fewer polls |
 | `MCP_DATA_DIR` | `~/.code-context` | Index DB + global `.env` location |
 | `MCP_MODEL_CACHE_DIR` | `~/.mcp/models` | Local ONNX model cache |
 | `MCP_EMBEDDING_MODEL` | `Xenova/multilingual-e5-small` | Local embedding model |
