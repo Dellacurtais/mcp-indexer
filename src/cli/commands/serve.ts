@@ -90,6 +90,15 @@ export async function runServe(rootArg: string | undefined, opts: ServeOpts): Pr
     opened = openProject(root, opts);
     const registry = shapeRegistry(base, { projectName: opened.project.name });
     if (opts.watch !== false) watcher = startIncrementalWatch(opened, root);
+    // Warm the embedding model in the background (mode:'vector' forces the vector
+    // path → loads the ONNX model). The FIRST semantic call (pack_context/search)
+    // otherwise pays this cold load, which can exceed the MCP client's request
+    // timeout on a fresh process. Fire-and-forget; the real call still works if it
+    // races ahead — it just waits for the same load.
+    void opened.ctx.hybridSearch
+      .search(opened.project.id, opened.project.name, 'warm up the index', { mode: 'vector', type: 'all', limit: 1 })
+      .then(() => log('search models warmed'))
+      .catch(() => {});
     const fileCount = opened.db.getStats(opened.project.id).file_count ?? 0;
     log(
       `serving ${opened.project.name} (${root}) — ${registry.size} tools, ${fileCount} files indexed` +
@@ -131,6 +140,13 @@ export async function runServe(rootArg: string | undefined, opts: ServeOpts): Pr
   });
 
   await server.connect(new StdioServerTransport()); // instant handshake
+
+  // Proactively resolve + open the project right after the handshake so the
+  // background model warm-up (in resolveAndOpen) overlaps with the client reading
+  // the tool list — instead of the first semantic tool call paying the cold load.
+  // Best-effort: if the root isn't resolvable yet (no rootArg + client roots not
+  // ready), this no-ops and the lazy path on the first call still works.
+  void ready().catch(() => {});
 
   let shuttingDown = false;
   const shutdown = async (): Promise<void> => {
