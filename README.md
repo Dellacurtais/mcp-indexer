@@ -365,6 +365,26 @@ guessing or reading whole files. (Prefer `.github/copilot-instructions.md`; `AGE
 emerging cross-tool standard and coexists with it — JetBrains also reads nested `AGENTS.md` /
 `CLAUDE.md` via Settings → GitHub Copilot → Customizations.)
 
+### Plan agent (VS Code, experimental)
+
+By default MCP tools are available in **agent mode** but NOT to VS Code's **Plan agent** (the
+research/planning phase behind `/plan`). To let the plan agent research with code-context, add its
+tools to the experimental `github.copilot.chat.planAgent.additionalTools` setting. **`code-context
+install --mcp` does this for you** — it writes/merges `.vscode/settings.json`:
+
+```jsonc
+// .vscode/settings.json  (workspace) — or your USER settings.json for all repos
+{
+  "github.copilot.chat.planAgent.additionalTools": ["code-context/*"]
+}
+```
+
+The reference format is **`<server-key>/<tool>`**, or **`<server-key>/*`** for all of a server's
+tools. The `<server-key>` is the key in `.vscode/mcp.json` (here `code-context`). To scope it instead
+of `*`, list specific tools, e.g. `"code-context/agent_explore"`, `"code-context/pack_context"`,
+`"code-context/search"`. Type `#` in Copilot Chat to see the exact tool ids your VS Code build
+exposes. (The setting is experimental and VS Code-only; agent mode needs none of this.)
+
 ---
 
 ## Tools exposed (read-only)

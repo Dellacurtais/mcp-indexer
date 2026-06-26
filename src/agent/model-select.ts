@@ -18,7 +18,6 @@ export function resolveExplorerTarget(env: NodeJS.ProcessEnv = process.env): Exp
       inference: env.CODE_CONTEXT_EXPLORER_INFERENCE === '1',
     };
   }
-  // Fallback: reuse the enrich backend (copilot/bedrock only — mock can't explore).
   const ap = (env.CODE_CONTEXT_ANALYSIS ?? '').trim().toLowerCase();
   if (ap === 'copilot' || ap === 'bedrock') {
     return {
