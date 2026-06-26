@@ -131,8 +131,10 @@ code-context index   [repo]             # constrói/atualiza o índice   (--watc
 code-context serve   [repo]             # o servidor MCP para o editor (omita o repo p/ auto-detectar roots)
 code-context status  [repo]             # arquivos / símbolos / cobertura de vetores
 code-context search  "<query>" [repo]   # consulta o índice  (--mode, --type, --limit, --lang, --exclude-lang)
-code-context enrich  [repo]             # passo LLM PAGO opcional (AWS Bedrock) — veja abaixo
+code-context enrich  [repo]             # passo LLM opcional (Bedrock ou Copilot) — veja abaixo
 code-context install [repo]             # cria .github/copilot-instructions.md  (--mcp, --agents, --force)
+code-context ui                         # painel local: projetos, provedores, modelos, busca (127.0.0.1:7333)
+code-context login   copilot            # conecta o GitHub Copilot (device flow) — usa seu plano como LLM
 code-context projects                   # lista todos os projetos indexados
 ```
 
@@ -141,7 +143,9 @@ code-context projects                   # lista todos os projetos indexados
 | `index` | `--no-embeddings` (só estrutural + FTS, pula o modelo), `--watch` (fica vivo, incremental) |
 | `serve` | `--no-embeddings`, `--no-watch` |
 | `search` | `--mode auto\|fts\|vector\|hybrid`, `--type files\|symbols\|all`, `--limit <n>`, `--lang ts,py`, `--exclude-lang css,scss` |
-| `enrich` | `--limit`, `--budget`, `--model`, `--inference`, `--min-lines`, `--mock`, `--dry-run`, `--synthesize` |
+| `enrich` | `--kind bedrock\|copilot\|mock`, `--limit`, `--budget`, `--model`, `--inference`, `--min-lines`, `--dry-run`, `--synthesize` |
+| `ui` | `--port <n>`, `--no-open` |
+| `login` | `copilot` (único provedor hoje) |
 
 `[repo]` é opcional em todos — dê `cd` no seu repo e omita: o comando usa o **diretório atual** (a
 home / a raiz do drive são recusadas). Todos os projetos compartilham um índice em
@@ -166,21 +170,27 @@ home / a raiz do drive são recusadas). Todos os projetos compartilham um índic
 
 ---
 
-## Opcional: `enrich` — resumos e camadas com LLM (AWS Bedrock)
+## Opcional: `enrich` — resumos e camadas com LLM (Bedrock **ou** Copilot)
 
-Tudo acima é local e grátis. O `enrich` opcionalmente paga um LLM para adicionar **resumos de uma
+Tudo acima é local e grátis. O `enrich` opcionalmente usa um LLM para adicionar **resumos de uma
 linha por arquivo**, **tags de conceito**, **camadas verificadas** e uma **síntese de arquitetura
 do projeto** para os **arquivos mais dependidos** — exatamente o que mais reduz a leitura
-investigativa do agente. É **desligado** a menos que você peça, e é orçado.
+investigativa do agente. É **desligado** a menos que você peça, e é orçado. Backend = AWS Bedrock,
+**ou sua assinatura do GitHub Copilot** (`code-context login copilot` uma vez → ~sem custo por token),
+ou um mock offline.
 
 ```bash
-# Pré-visualize os alvos (rankeados por in-degree) — sem AWS, sem custo:
+# Pré-visualize os alvos (rankeados por in-degree) — sem custo:
 code-context enrich <repo> --dry-run
 
-# Roda o pipeline inteiro offline com resumos falsos (prova a fiação, sem AWS):
+# Roda o pipeline inteiro offline com resumos falsos (prova a fiação):
 code-context enrich <repo> --mock --synthesize
 
-# Execução real — credenciais do seu env / ~/.aws / role da instância (veja Configuração):
+# Use sua assinatura do Copilot (conecte uma vez; ~grátis):
+code-context login copilot
+code-context enrich <repo> --kind copilot --model gpt-4o-mini --limit 100
+
+# Ou AWS Bedrock — credenciais do seu env / ~/.aws / role da instância (veja Configuração):
 export CODE_CONTEXT_ANALYSIS=bedrock
 code-context enrich <repo> --limit 100 --budget 0.50
 
@@ -229,6 +239,36 @@ CODE_CONTEXT_RERANK_MODEL=amazon.rerank-v1:0     # opcional; ou cohere.rerank-v3
 
 ---
 
+## Painel de configuração (`code-context ui`)
+
+Para quem prefere não lidar com `.env` e IDs de modelo crípticos, rode:
+
+```bash
+code-context ui
+# ou: code-context ui --no-open --port 7333
+```
+
+Abre um painel local no navegador (`http://127.0.0.1:7333`) com três abas:
+
+- **Projetos** — lista os projetos indexados (arquivos, símbolos, cobertura vetorial, custo), adiciona
+  novas pastas e dispara a indexação com barra de progresso em tempo real (via SSE).
+- **Configuração AWS** — formulário amigável para credenciais AWS, orçamento por execução e **seletor
+  de modelo em cards**. Os modelos são **descobertos dinamicamente** da sua conta AWS via
+  `ListFoundationModels` + `ListInferenceProfiles` — sem catálogo estático que envelhece. O prefixo de
+  inference-profile (`us./eu./apac.`) é resolvido automaticamente. Botão **"Testar conexão"** valida as
+  credenciais e o modelo escolhido (faz um Converse de 1 token) antes de salvar.
+- **Busca** — playground que chama a mesma API híbrida do `serve` e mostra os resultados ranqueados.
+
+As credenciais são salvas em `~/.code-context/.env` (o mesmo arquivo lido pela CLI). O servidor escuta
+**apenas em `127.0.0.1`** (loopback) — suas credenciais AWS nunca saem da sua máquina.
+
+> **Requisitos para a aba de modelos:** a dep opcional `@aws-sdk/client-bedrock` precisa estar instalada
+> (`pnpm install` sem `--no-optional` cuida disso) e sua role AWS precisa das permissões
+> `bedrock:ListFoundationModels` + `bedrock:ListInferenceProfiles` (já incluídas em
+> `AmazonBedrockFullAccess`). Sem isso, a aba mostra um erro amigável e um campo manual de fallback.
+
+---
+
 ## Configuração e `.env`
 
 Em vez de exportar variáveis, coloque-as num arquivo `.env`. Dois locais são carregados, nesta
@@ -262,7 +302,9 @@ do editor — sem credenciais na config do launcher.
 |---|---|---|
 | `MCP_SERVER_NAME` | `code-context` | Nome mostrado ao cliente MCP no handshake |
 | `MCP_OUTPUT_CAP_LEVEL` | `economic` | Densidade da saída: `economic` → `ultra` |
-| `MCP_TOOLS` | `core` | Superfície de tools: `core` (~11, menos = o agente escolhe melhor), `full` (todas as 24), ou uma lista separada por vírgula |
+| `MCP_TOOLS` | `core` | Superfície somente-leitura: `core` (~12, menos = o agente escolhe melhor), `full` (todas), ou uma lista separada por vírgula |
+| `MCP_EXEC` | — | `1` adiciona as tools opt-in `exec_command`/`write_stdin`/`list_sessions` POR CIMA das somente-leitura (nunca as substitui). Só em projetos confiáveis |
+| `CODE_CONTEXT_EXPLORER_PROVIDER` / `_MODEL` / `_INFERENCE` | backend do enrich | Provider+modelo do sub-agente `explore` (defina no painel). Limites: `MCP_EXPLORE_MAX_CALLS`/`_BUDGET`/`_TIMEOUT_MS` |
 | `MCP_DATA_DIR` | `~/.code-context` | Local do índice + `.env` global |
 | `MCP_MODEL_CACHE_DIR` | `~/.mcp/models` | Cache de modelos ONNX locais |
 | `MCP_EMBEDDING_MODEL` | `Xenova/multilingual-e5-small` | Modelo de embedding local |
@@ -360,10 +402,16 @@ antes de adivinhar ou ler arquivos inteiros. (Prefira `.github/copilot-instructi
 | Arquivo / outline | `get_file_skeleton`, `get_file_structure`, `read_file`, `list_directory` |
 | Símbolos | `find_references`, `get_symbol_body`, `get_class_members`, `get_hierarchy`, `find_implementations`, `prepare_edit` |
 | Grafo | `get_dependencies`, `get_dependents` |
+| Explorar | `explore` — delega uma investigação ("ache/entenda/onde") a um modelo BARATO (definido no painel). Roda um loop somente-leitura sem limite de turnos e devolve um relatório markdown COMPLETO e sem cap (arquivos+linhas, símbolos, trechos, deps), pra o modelo caro não gastar token explorando |
 | Índice | `reindex` (disparado pelo agente: constrói/atualiza o índice pelo chat — sem terminal) |
 
-Por padrão o `serve` expõe um **core enxuto** (~11 tools) — o agente escolhe melhor num conjunto
+Por padrão o `serve` expõe um **core enxuto** (~12 tools) — o agente escolhe melhor num conjunto
 pequeno. Use `MCP_TOOLS=full` para a tabela inteira, ou `MCP_TOOLS=search,read_file,…` para um subset.
+
+**`exec` opcional** (desligado por padrão): `MCP_EXEC=1` (ou o toggle no painel) adiciona
+`exec_command` / `write_stdin` / `list_sessions` — sessões de shell reais escopadas à raiz do projeto —
+**por cima** das tools somente-leitura (elas sempre coexistem; o exec nunca as substitui). Use só em
+projetos confiáveis.
 Todos os resultados são Markdown denso; use `--lang`/`--exclude-lang` (no search) para cortar ruído.
 
 ---

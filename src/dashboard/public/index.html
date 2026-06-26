@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>code-context — Painel</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">code-context</div>
+    <nav class="tabs">
+      <a href="#projects" class="tab" data-tab="projects">Projetos</a>
+      <a href="#config" class="tab" data-tab="config">Configuração</a>
+      <a href="#search" class="tab" data-tab="search">Busca</a>
+    </nav>
+  </header>
+
+  <main id="app">
+    <!-- Projetos -->
+    <section id="view-projects" class="view">
+      <div class="view-head">
+        <h2>Projetos indexados</h2>
+        <button id="btn-add-project" class="primary">+ Adicionar pasta</button>
+      </div>
+      <div id="add-project-form" class="hidden card">
+        <label>Caminho da pasta do projeto
+          <input id="new-project-path" type="text" placeholder="D:\meu-projeto ou /home/user/projeto" />
+        </label>
+        <div class="row">
+          <button id="btn-confirm-add" class="primary">Adicionar</button>
+          <button id="btn-cancel-add" class="ghost">Cancelar</button>
+        </div>
+        <p id="add-project-error" class="error hidden"></p>
+      </div>
+      <div id="projects-list" class="projects-list">
+        <p class="muted">Carregando…</p>
+      </div>
+      <div id="index-panel" class="hidden card">
+        <div class="view-head">
+          <h3 id="index-panel-title">Indexando…</h3>
+          <span id="index-phase" class="badge">structural</span>
+        </div>
+        <progress id="index-progress" max="100" value="0"></progress>
+        <div id="index-counter" class="muted">—</div>
+        <pre id="index-log" class="log hidden"></pre>
+      </div>
+    </section>
+
+    <!-- Configuração -->
+    <section id="view-config" class="view hidden">
+      <div class="view-head"><h2>Configuração</h2></div>
+      <p class="muted">Salvo em <code id="env-path">~/.code-context/.env</code> (segredos OAuth do Copilot ficam no banco local). Alterações de provider/modelo/exec pedem reiniciar o <code>code-context serve</code> no editor.</p>
+
+      <!-- Conta / Provedores -->
+      <div class="card">
+        <div class="view-head"><h3>Conta / Provedores</h3></div>
+        <p class="muted">Conecte o GitHub Copilot para usar sua assinatura como LLM do enrich e do explorador (sem custo por token). O Bedrock usa as credenciais AWS abaixo.</p>
+        <div id="copilot-box" class="row" style="align-items:center;gap:12px;flex-wrap:wrap">
+          <span id="copilot-state" class="muted">verificando…</span>
+          <button id="btn-copilot-connect" class="primary">Conectar Copilot</button>
+          <button id="btn-copilot-disconnect" class="ghost hidden">Desconectar</button>
+        </div>
+        <div id="copilot-device" class="card hidden" style="margin-top:10px">
+          <p>1. Abra <a id="copilot-uri" href="#" target="_blank" rel="noopener">a página de ativação</a> e informe o código:</p>
+          <p class="device-code"><code id="copilot-code">————</code></p>
+          <p id="copilot-poll" class="muted">aguardando autorização…</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Credenciais AWS Bedrock</h3>
+        <label>Região AWS
+          <input id="aws-region" type="text" placeholder="us-east-1" />
+        </label>
+        <label>Access Key ID
+          <input id="aws-access-key-id" type="text" autocomplete="off" />
+        </label>
+        <label>Secret Access Key
+          <div class="row">
+            <input id="aws-secret-access-key" type="password" placeholder="••••••••" autocomplete="off" />
+            <button id="btn-toggle-secret" class="ghost" type="button">mostrar</button>
+          </div>
+        </label>
+        <label>Session Token <span class="muted">(opcional, SSO/temporário)</span>
+          <input id="aws-session-token" type="password" autocomplete="off" />
+        </label>
+        <div class="row">
+          <button id="btn-test-aws" class="ghost">Testar conexão</button>
+          <span id="aws-test-result" class="muted"></span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="view-head">
+          <h3>Enriquecimento (enrich)</h3>
+          <button id="btn-refresh-models" class="ghost">Recarregar modelos</button>
+        </div>
+        <label>Backend
+          <select id="enrich-provider">
+            <option value="">desligado</option>
+            <option value="bedrock">AWS Bedrock</option>
+            <option value="copilot">GitHub Copilot</option>
+            <option value="mock">Mock (offline, sem custo)</option>
+          </select>
+        </label>
+        <p id="models-status" class="muted">Selecione um backend e um modelo.</p>
+        <div id="models-grid" class="models-grid"></div>
+        <details class="advanced">
+          <summary>Avançado — orçamento</summary>
+          <label>Orçamento por execução (USD)
+            <input id="budget" type="number" step="0.01" min="0" placeholder="1.00" />
+          </label>
+        </details>
+      </div>
+
+      <!-- Sub-agente explorer -->
+      <div class="card">
+        <div class="view-head"><h3>Sub-agente explorer</h3></div>
+        <p class="muted">Modelo barato que o Copilot aciona pela tool <code>explore</code> para investigar o código e devolver um relatório completo — economizando tokens do modelo caro. Padrão: o mesmo backend do enrich.</p>
+        <div class="row">
+          <label>Provider
+            <select id="explorer-provider">
+              <option value="">(usar o do enrich)</option>
+              <option value="bedrock">AWS Bedrock</option>
+              <option value="copilot">GitHub Copilot</option>
+            </select>
+          </label>
+          <label>Modelo
+            <select id="explorer-model"><option value="">—</option></select>
+          </label>
+        </div>
+      </div>
+
+      <!-- Exec (opt-in) -->
+      <div class="card">
+        <div class="view-head"><h3>Ferramenta exec</h3></div>
+        <label class="checkbox">
+          <input id="enable-exec" type="checkbox" /> Habilitar <code>exec</code> (<code>MCP_EXEC=1</code>)
+        </label>
+        <p class="error" style="margin-top:6px">⚠ Adiciona execução de comandos do sistema às ferramentas (que são somente-leitura por padrão). As tools read-only continuam ativas. Use apenas em projetos confiáveis.</p>
+      </div>
+
+      <div class="row sticky-actions">
+        <button id="btn-save-config" class="primary">Salvar configuração</button>
+        <span id="config-save-result" class="muted"></span>
+      </div>
+    </section>
+
+    <!-- Busca -->
+    <section id="view-search" class="view hidden">
+      <div class="view-head"><h2>Busca (playground)</h2></div>
+      <div class="card">
+        <label>Consulta
+          <input id="search-query" type="text" placeholder="ex.: autenticação do usuário" />
+        </label>
+        <div class="row">
+          <label>Projeto
+            <select id="search-project"></select>
+          </label>
+          <label>Modo
+            <select id="search-mode">
+              <option value="auto">auto</option>
+              <option value="hybrid">hybrid</option>
+              <option value="fts">fts (léxico)</option>
+              <option value="vector">vector (semântico)</option>
+            </select>
+          </label>
+          <label>Tipo
+            <select id="search-type">
+              <option value="all">tudo</option>
+              <option value="files">arquivos</option>
+              <option value="symbols">símbolos</option>
+            </select>
+          </label>
+          <button id="btn-search" class="primary">Buscar</button>
+        </div>
+        <div id="search-results" class="results"></div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>

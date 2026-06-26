@@ -69,11 +69,17 @@ export async function runEnrich(rootArg: string | undefined, opts: EnrichOpts): 
       return;
     }
 
-    const provider = createAnalysisService({ kind: opts.kind, model: opts.model, inference: opts.inference });
+    const provider = createAnalysisService({
+      kind: opts.kind,
+      model: opts.model,
+      inference: opts.inference,
+      store: opened.ctx.providerStore,
+    });
     if (!provider) {
       log(
         'enrichment provider not configured. Either:\n' +
           '  • set CODE_CONTEXT_ANALYSIS=bedrock + AWS creds (optional --model / --inference), or\n' +
+          '  • set CODE_CONTEXT_ANALYSIS=copilot after `code-context login copilot`, or\n' +
           '  • pass --mock to preview the pipeline offline (no AWS, no cost).',
       );
       return;

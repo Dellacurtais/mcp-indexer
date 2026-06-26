@@ -10,6 +10,14 @@
  * or set `inference: true` to have it prepended from the region.
  */
 import type { FileLayer } from '@ctx/shared/types.js';
+import type { ProviderStore } from '@ctx/store/provider-store.js';
+import type { ChatProvider } from '@ctx/llm/chat-provider.js';
+import { CopilotChatProvider } from '@ctx/llm/copilot/chat-provider.js';
+import { priceFor, resolveModelId, humanizeBedrockError } from '@ctx/llm/bedrock/util.js';
+
+// Re-export the Bedrock helpers (moved to the @ctx/llm leaf to avoid an
+// llm<->indexer cycle) so existing importers of this module keep working.
+export { priceFor, resolveModelId, humanizeBedrockError };
 
 export interface AnalysisItem {
   path: string;
@@ -71,28 +79,6 @@ function parseAnalysisJson(text: string): { summary: string; concepts: string[];
   }
   if (!summary) summary = text.replace(/\s+/g, ' ').trim().slice(0, 160);
   return { summary: summary.slice(0, 200), concepts, layer };
-}
-
-export function priceFor(model: string): { inPerMTok: number; outPerMTok: number } {
-  const m = model.toLowerCase();
-  if (m.includes('titan-text-lite')) return { inPerMTok: 0.15, outPerMTok: 0.2 };
-  if (m.includes('titan-text-express')) return { inPerMTok: 0.2, outPerMTok: 0.6 };
-  if (m.includes('titan-text-premier')) return { inPerMTok: 0.5, outPerMTok: 1.5 };
-  if (m.includes('nova-micro')) return { inPerMTok: 0.035, outPerMTok: 0.14 };
-  if (m.includes('nova-lite')) return { inPerMTok: 0.06, outPerMTok: 0.24 };
-  if (m.includes('nova-pro')) return { inPerMTok: 0.8, outPerMTok: 3.2 };
-  if (m.includes('haiku')) return { inPerMTok: 0.8, outPerMTok: 4.0 };
-  if (m.includes('sonnet')) return { inPerMTok: 3.0, outPerMTok: 15.0 };
-  if (m.includes('llama')) return { inPerMTok: 0.2, outPerMTok: 0.2 };
-  return { inPerMTok: 1.0, outPerMTok: 4.0 }; // conservative default → budget errs safe
-}
-
-/** Prepend the region inference-profile prefix unless the id already carries one. */
-export function resolveModelId(model: string, region: string, inference: boolean): string {
-  if (/^(us|eu|apac|us-gov)\./i.test(model)) return model;
-  if (!inference) return model;
-  const prefix = region.startsWith('eu') ? 'eu' : region.startsWith('ap') ? 'apac' : 'us';
-  return `${prefix}.${model}`;
 }
 
 const ANALYZE_SYSTEM =
@@ -220,19 +206,59 @@ export class BedrockAnalysisService implements AnalysisProvider {
   }
 }
 
-function humanizeBedrockError(e: unknown, model: string): string {
-  if (!(e instanceof Error)) return String(e);
-  const name = e.name;
-  const msg = e.message;
-  if (name === 'AccessDeniedException' || /access denied|not authorized/i.test(msg)) {
-    return `Bedrock access denied for "${model}" — check AWS creds + model access at console.aws.amazon.com/bedrock (modelaccess). ${msg}`;
+// ─── Chat-backed (any ChatProvider: Copilot, Bedrock, …) ────────
+
+/**
+ * Adapts any ChatProvider into an AnalysisProvider by prompting it with the
+ * same analyze/synthesize system prompts the Bedrock path uses. This is how
+ * enrich runs on the user's Copilot subscription (zero per-token cost).
+ */
+export class ChatBackedAnalysisService implements AnalysisProvider {
+  readonly name: string;
+  readonly model: string;
+
+  constructor(private chat: ChatProvider) {
+    this.name = chat.name;
+    this.model = chat.model;
   }
-  if (name === 'ValidationException' && /model identifier|inference profile/i.test(msg)) {
-    return `Bedrock rejected model id "${model}" — not enabled in your region, or it needs an inference-profile id (try --inference, e.g. us.${model}). ${msg}`;
+
+  async analyze(item: AnalysisItem): Promise<AnalysisResult> {
+    const user = `File: ${item.path} (${item.language})\n\n\`\`\`\n${item.content}\n\`\`\``;
+    const r = await this.chat.chat(
+      [
+        { role: 'system', content: ANALYZE_SYSTEM },
+        { role: 'user', content: user },
+      ],
+      { maxTokens: 300, temperature: 0 },
+    );
+    const parsed = parseAnalysisJson(r.text);
+    return {
+      summary: parsed.summary,
+      concepts: parsed.concepts,
+      layer: parsed.layer,
+      inputTokens: r.usage.inputTokens,
+      outputTokens: r.usage.outputTokens,
+    };
   }
-  if (name === 'ThrottlingException') return `Bedrock throttled "${model}" — retry after a backoff. ${msg}`;
-  if (name === 'ResourceNotFoundException') return `Bedrock model "${model}" not found in this region. ${msg}`;
-  return `Bedrock error (${name || 'unknown'}): ${msg}`;
+
+  async synthesize(
+    projectName: string,
+    files: Array<{ path: string; summary: string; layer: string }>,
+  ): Promise<ProjectSynthesis> {
+    const list = files.map((f) => `- ${f.path} — ${f.summary} [${f.layer}]`).join('\n');
+    const r = await this.chat.chat(
+      [
+        { role: 'system', content: SYNTH_SYSTEM },
+        { role: 'user', content: `Project: ${projectName}\n\nKey files:\n${list}` },
+      ],
+      { maxTokens: 400, temperature: 0.2 },
+    );
+    return { text: r.text.trim(), inputTokens: r.usage.inputTokens, outputTokens: r.usage.outputTokens };
+  }
+
+  price(): { inPerMTok: number; outPerMTok: number } {
+    return this.chat.price();
+  }
 }
 
 // ─── Mock (offline preview / pipeline test) ─────────────────────
@@ -275,6 +301,8 @@ export function createAnalysisService(opts: {
   kind?: string;
   model?: string;
   inference?: boolean;
+  /** ProviderStore — required for the `copilot` backend (reads the OAuth token). */
+  store?: ProviderStore;
 }): AnalysisProvider | null {
   const kind = (opts.kind ?? process.env.CODE_CONTEXT_ANALYSIS ?? '').toLowerCase();
   if (kind === 'mock') return new MockAnalysisService();
@@ -283,6 +311,14 @@ export function createAnalysisService(opts: {
       model: opts.model ?? process.env.CODE_CONTEXT_ANALYSIS_MODEL,
       inference: opts.inference ?? process.env.CODE_CONTEXT_ANALYSIS_INFERENCE === '1',
     });
+  }
+  if (kind === 'copilot') {
+    if (!opts.store || !opts.store.getOAuth('copilot')) {
+      process.stderr.write('[code-context] Copilot not connected — run: code-context login copilot\n');
+      return null;
+    }
+    const model = opts.model ?? process.env.CODE_CONTEXT_ANALYSIS_MODEL ?? 'gpt-4o-mini';
+    return new ChatBackedAnalysisService(new CopilotChatProvider(opts.store, { model }));
   }
   return null;
 }

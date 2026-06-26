@@ -127,8 +127,10 @@ code-context index   [repo]             # build/refresh the index   (--watch, --
 code-context serve   [repo]             # the MCP server for an editor (omit repo to auto-detect roots)
 code-context status  [repo]             # files / symbols / vector coverage
 code-context search  "<query>" [repo]   # query the index  (--mode, --type, --limit, --lang, --exclude-lang)
-code-context enrich  [repo]             # OPTIONAL paid LLM pass (AWS Bedrock) — see below
+code-context enrich  [repo]             # OPTIONAL LLM pass (Bedrock or Copilot) — see below
 code-context install [repo]             # scaffold .github/copilot-instructions.md  (--mcp, --agents, --force)
+code-context ui                         # local dashboard: projects, providers, models, search (127.0.0.1:7333)
+code-context login   copilot            # connect GitHub Copilot (device flow) — use your plan as the LLM
 code-context projects                   # list every indexed project
 ```
 
@@ -137,11 +139,27 @@ code-context projects                   # list every indexed project
 | `index` | `--no-embeddings` (structural + FTS only, skip the model), `--watch` (stay alive, incremental) |
 | `serve` | `--no-embeddings`, `--no-watch` |
 | `search` | `--mode auto\|fts\|vector\|hybrid`, `--type files\|symbols\|all`, `--limit <n>`, `--lang ts,py`, `--exclude-lang css,scss` |
-| `enrich` | `--limit`, `--budget`, `--model`, `--inference`, `--min-lines`, `--mock`, `--dry-run`, `--synthesize` |
+| `enrich` | `--kind bedrock\|copilot\|mock`, `--limit`, `--budget`, `--model`, `--inference`, `--min-lines`, `--dry-run`, `--synthesize` |
+| `ui` | `--port <n>`, `--no-open` |
+| `login` | `copilot` (the only provider today) |
 
 `[repo]` is optional everywhere — `cd` into your repo and omit it, and the command uses the
 **current directory** (the home dir / a drive root are refused). All projects share one index at
 `~/.code-context/index.db` (override with `MCP_DATA_DIR`).
+
+---
+
+## Dashboard (`code-context ui`)
+
+`code-context ui` opens a local web dashboard at `http://127.0.0.1:7333` (loopback only):
+
+- **Projetos** — list/add projects, index with live progress, see coverage.
+- **Configuração** — connect **GitHub Copilot** (OAuth device flow), set AWS Bedrock credentials,
+  pick the **enrich** backend + model, pick the **explorer** sub-agent model, and toggle the opt-in
+  **exec** tool. Model/feature choices are saved to `~/.code-context/.env`; Copilot OAuth tokens are
+  stored in the local SQLite DB, never in the `.env`. Changing a process-start setting prompts you to
+  restart `code-context serve` in the editor.
+- **Busca** — a hybrid-search playground against any indexed project.
 
 ---
 
@@ -163,21 +181,26 @@ code-context projects                   # list every indexed project
 
 ---
 
-## Optional: `enrich` — LLM summaries & layers (AWS Bedrock)
+## Optional: `enrich` — LLM summaries & layers (Bedrock **or** Copilot)
 
-Everything above is local and free. `enrich` optionally pays an LLM to add **one-line file
+Everything above is local and free. `enrich` optionally uses an LLM to add **one-line file
 summaries**, **concept tags**, **verified layers**, and a **project architecture synthesis** for
 the **most depended-on files** — exactly what most reduces an agent's investigative reading. It's
-**off** unless you ask for it, and it's budgeted.
+**off** unless you ask for it, and it's budgeted. Backend = AWS Bedrock, **or your GitHub Copilot
+subscription** (`code-context login copilot` once → ~zero per-token cost), or an offline mock.
 
 ```bash
-# Preview the targets (ranked by in-degree) — no AWS, no cost:
+# Preview the targets (ranked by in-degree) — no cost:
 code-context enrich <repo> --dry-run
 
-# Run the whole pipeline offline with fake summaries (proves the wiring, no AWS):
+# Run the whole pipeline offline with fake summaries (proves the wiring):
 code-context enrich <repo> --mock --synthesize
 
-# Real run — credentials from your env / ~/.aws / instance role (see Configuration):
+# Use your Copilot subscription (connect once; ~free):
+code-context login copilot
+code-context enrich <repo> --kind copilot --model gpt-4o-mini --limit 100
+
+# Or AWS Bedrock — credentials from your env / ~/.aws / instance role (see Configuration):
 export CODE_CONTEXT_ANALYSIS=bedrock
 code-context enrich <repo> --limit 100 --budget 0.50
 
@@ -258,7 +281,9 @@ server too — no credentials in the editor launcher config.
 |---|---|---|
 | `MCP_SERVER_NAME` | `code-context` | Name shown to the MCP client in the handshake |
 | `MCP_OUTPUT_CAP_LEVEL` | `economic` | Output density: `economic` → `ultra` |
-| `MCP_TOOLS` | `core` | Tool surface: `core` (~11, leaner = better agent tool-selection), `full` (all 24), or a comma list of tool names |
+| `MCP_TOOLS` | `core` | Read-only tool surface: `core` (~12, leaner = better agent tool-selection), `full` (all read-only), or a comma list of tool names |
+| `MCP_EXEC` | — | `1` adds the opt-in `exec_command`/`write_stdin`/`list_sessions` shell tools ON TOP of the read-only set (never replaces them). Use only in trusted projects |
+| `CODE_CONTEXT_EXPLORER_PROVIDER` / `_MODEL` / `_INFERENCE` | enrich backend | Provider+model for the `explore` sub-agent (set in the dashboard). Bounds: `MCP_EXPLORE_MAX_CALLS`/`_BUDGET`/`_TIMEOUT_MS` |
 | `MCP_DATA_DIR` | `~/.code-context` | Index DB + global `.env` location |
 | `MCP_MODEL_CACHE_DIR` | `~/.mcp/models` | Local ONNX model cache |
 | `MCP_EMBEDDING_MODEL` | `Xenova/multilingual-e5-small` | Local embedding model |
@@ -354,11 +379,17 @@ emerging cross-tool standard and coexists with it — JetBrains also reads neste
 | File / outline | `get_file_skeleton`, `get_file_structure`, `read_file`, `list_directory` |
 | Symbols | `find_references`, `get_symbol_body`, `get_class_members`, `get_hierarchy`, `find_implementations`, `prepare_edit` |
 | Graph | `get_dependencies`, `get_dependents` |
+| Explore | `explore` — delegate a "find/understand/where" investigation to a CHEAP model (set in the dashboard). It runs a no-turn-limit read-only loop and returns a FULL, uncapped markdown report (files+lines, symbols, snippets, deps), so the expensive model spends no tokens exploring |
 | Index | `reindex` (agent-triggered build/refresh from chat — no terminal needed) |
 
-By default `serve` advertises a **lean core** (~11 tools) — agents pick tools more accurately from a
+By default `serve` advertises a **lean core** (~12 tools) — agents pick tools more accurately from a
 small set. Set `MCP_TOOLS=full` for the whole table above, or `MCP_TOOLS=search,read_file,…` for a
 custom subset. All results are dense Markdown; pass `--lang`/`--exclude-lang` (search) to cut noise.
+
+**Opt-in `exec`** (off by default): set `MCP_EXEC=1` (or toggle it in the dashboard) to add
+`exec_command` / `write_stdin` / `list_sessions` — real shell sessions scoped to the project root —
+**on top of** the read-only tools (they always coexist; exec never replaces them). Use only in
+trusted projects.
 
 ---
 

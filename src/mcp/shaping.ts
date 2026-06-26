@@ -35,6 +35,7 @@ const TOOL_BASE: Record<string, number> = {
   get_file_structure: 4_000,
   read_file: 24_000,
   pack_context: 8_000,
+  exec_command: 24_000,
 };
 const CEILING = 1_000_000;
 
@@ -63,6 +64,7 @@ export const DEFAULT_ALLOWLIST: readonly string[] = [
   'get_dependencies',
   'get_dependents',
   'pack_context',
+  'explore',
   'reindex',
 ];
 
@@ -82,21 +84,49 @@ export const CORE_ALLOWLIST: readonly string[] = [
   'find_references',
   'get_symbol_body',
   'get_dependencies',
+  'explore',
   'reindex',
 ];
 
+/** The opt-in exec tools — NEVER part of the read-only set; only added on top. */
+export const EXEC_ALLOWLIST: readonly string[] = ['exec_command', 'write_stdin', 'list_sessions'];
+
 /**
- * Which tools `serve` advertises. `MCP_TOOLS`: unset/`core` → CORE_ALLOWLIST;
- * `full`/`all` → the whole read-only surface; or a comma list of exact tool
- * names (intersected with the known set).
+ * The READ-ONLY surface `serve` advertises. `MCP_TOOLS`: unset/`core` →
+ * CORE_ALLOWLIST; `full`/`all` → the whole read-only surface; or a comma list of
+ * exact read-only tool names (intersected with the known set; never empty).
  */
-export function resolveAllowlist(env: NodeJS.ProcessEnv = process.env): readonly string[] {
+export function resolveReadAllowlist(env: NodeJS.ProcessEnv = process.env): readonly string[] {
   const raw = (env.MCP_TOOLS ?? '').trim().toLowerCase();
   if (!raw || raw === 'core') return CORE_ALLOWLIST;
   if (raw === 'full' || raw === 'all') return DEFAULT_ALLOWLIST;
   const known = new Set(DEFAULT_ALLOWLIST);
   const picked = raw.split(',').map((s) => s.trim()).filter((s) => known.has(s));
   return picked.length ? picked : CORE_ALLOWLIST;
+}
+
+/**
+ * Is the opt-in exec surface enabled? ONLY via an explicit opt-in — `MCP_EXEC=1`
+ * (the dashboard toggle) or naming an exec tool in an `MCP_TOOLS` comma list.
+ * `full`/`all` deliberately do NOT enable exec (they mean "full read-only").
+ */
+export function execEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  const flag = (env.MCP_EXEC ?? '').trim().toLowerCase();
+  if (flag === '1' || flag === 'true' || flag === 'yes') return true;
+  const raw = (env.MCP_TOOLS ?? '').trim().toLowerCase();
+  if (!raw || raw === 'core' || raw === 'full' || raw === 'all') return false;
+  const named = new Set(raw.split(',').map((s) => s.trim()));
+  return EXEC_ALLOWLIST.some((t) => named.has(t));
+}
+
+/**
+ * The full advertised set = read-only surface, plus the exec tools when (and
+ * only when) explicitly opted in. The union guarantees exec can never replace
+ * the read-only tools — it only ever coexists with them.
+ */
+export function resolveAllowlist(env: NodeJS.ProcessEnv = process.env): readonly string[] {
+  const read = resolveReadAllowlist(env);
+  return execEnabled(env) ? [...read, ...EXEC_ALLOWLIST] : read;
 }
 
 export interface ShapeOptions {
@@ -125,10 +155,27 @@ export function shapeRegistry(
 }
 
 function wrap(tool: McpTool, level: ToolOutputCapLevel, projectName?: string): McpTool {
-  const base = TOOL_BASE[tool.name] ?? DEFAULT_BASE;
-  const cap = capFor(level, base, CEILING);
   const wantsProject =
     !!tool.inputSchema?.properties && 'project_name' in tool.inputSchema.properties;
+
+  // Uncapped tools (e.g. `explore`) keep project_name injection but skip the
+  // smart reducer + byte cap — their full payload IS the point.
+  if (tool.uncapped) {
+    return {
+      ...tool,
+      handler: async (rawArgs, ctx, authCtx) => {
+        let args = rawArgs;
+        if (projectName && wantsProject && (args.project_name == null || args.project_name === '')) {
+          args = { ...args, project_name: projectName };
+        }
+        const produced = await tool.handler(args, ctx, authCtx);
+        return typeof produced === 'string' ? produced : String(produced);
+      },
+    };
+  }
+
+  const base = TOOL_BASE[tool.name] ?? DEFAULT_BASE;
+  const cap = capFor(level, base, CEILING);
   return {
     ...tool,
     handler: async (rawArgs, ctx, authCtx) => {

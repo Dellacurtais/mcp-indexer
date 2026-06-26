@@ -11,3 +11,5 @@ dist/
 *.tgz
 scripts/_tmp*
 scripts/_*.mjs
+.idea/
+.vscode/

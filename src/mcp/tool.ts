@@ -27,6 +27,13 @@ export interface McpTool {
    * is built automatically from this field — no parallel map to maintain.
    */
   scope?: string;
+  /**
+   * When true, the producer-side output cap + smart reducer are SKIPPED for
+   * this tool (only project_name injection still applies). Reserved for tools
+   * whose value IS the full payload — e.g. `explore`, whose markdown report must
+   * reach the caller complete. Every other tool stays capped.
+   */
+  uncapped?: boolean;
   inputSchema: McpToolInputSchema;
   /**
    * Tool handler. The third argument carries per-request authentication

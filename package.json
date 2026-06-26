@@ -10,6 +10,7 @@
   },
   "files": [
     "dist",
+    "src/dashboard/public",
     "templates",
     ".env.example",
     "README.md",
@@ -19,6 +20,7 @@
     "build": "tsc && tsc-alias",
     "typecheck": "tsc --noEmit",
     "dev": "tsx src/cli/index.ts",
+    "ui": "tsx src/cli/index.ts ui",
     "pretest": "pnpm build",
     "test": "node --test scripts/smoke.test.mjs",
     "perf:search": "node scripts/perf-search.mjs",
@@ -41,8 +43,10 @@
     "zod": "^3.24.2"
   },
   "optionalDependencies": {
+    "@aws-sdk/client-bedrock": "^3.1029.0",
     "@aws-sdk/client-bedrock-agent-runtime": "^3.1029.0",
     "@aws-sdk/client-bedrock-runtime": "^3.1029.0",
+    "@hono/node-server": "^1.13.0",
     "tslib": "^2.6.2"
   },
   "devDependencies": {

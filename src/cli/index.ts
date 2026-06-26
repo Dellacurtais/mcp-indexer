@@ -4,6 +4,8 @@ import { runIndex } from './commands/index-cmd.js';
 import { runServe } from './commands/serve.js';
 import { runEnrich } from './commands/enrich.js';
 import { runInstall } from './commands/install.js';
+import { runUi } from './commands/ui.js';
+import { runLogin } from './commands/login.js';
 import { runStatus, runSearch, runProjects } from './commands/query.js';
 
 const program = new Command();
@@ -41,10 +43,11 @@ program
   .argument('[root]', 'project root (default: current directory)')
   .option('--limit <n>', 'max files to enrich (default 100)')
   .option('--budget <usd>', 'max USD to spend (default $MCP_INDEX_BUDGET or 1.00)')
-  .option('--model <id>', 'Bedrock model id (default amazon.titan-text-express-v1)')
+  .option('--kind <kind>', 'analysis backend: bedrock | copilot | mock (default: $CODE_CONTEXT_ANALYSIS)')
+  .option('--model <id>', 'model id (Bedrock id, or a Copilot model like gpt-4o-mini)')
   .option('--inference', 'prepend the region inference-profile prefix (us./eu./apac.) to the model id')
   .option('--min-lines <n>', 'skip files shorter than N lines (default 8)')
-  .option('--mock', 'use the offline mock provider (preview the pipeline without AWS / cost)')
+  .option('--mock', 'alias for --kind mock (offline preview without AWS / cost)')
   .option('--dry-run', 'list the files that would be enriched and exit (no cost)')
   .option('--synthesize', 'also print a project architecture summary built from the file summaries')
   .action(
@@ -53,6 +56,7 @@ program
       opts: {
         limit?: string;
         budget?: string;
+        kind?: string;
         model?: string;
         inference?: boolean;
         minLines?: string;
@@ -67,7 +71,7 @@ program
         model: opts.model,
         inference: !!opts.inference,
         minLines: opts.minLines ? Number(opts.minLines) : undefined,
-        kind: opts.mock ? 'mock' : undefined,
+        kind: opts.kind ?? (opts.mock ? 'mock' : undefined),
         dryRun: !!opts.dryRun,
         synthesize: !!opts.synthesize,
       });
@@ -119,6 +123,23 @@ program
   .description('List all indexed projects.')
   .action(() => {
     runProjects();
+  });
+
+program
+  .command('ui')
+  .description('Open the local configuration dashboard in your browser (projects, AWS/Bedrock setup, search).')
+  .option('--no-open', 'do not open the browser automatically')
+  .option('--port <n>', 'port to listen on (default 7333)')
+  .action(async (opts: { open?: boolean; port?: string }) => {
+    await runUi({ open: opts.open !== false, port: opts.port ? Number(opts.port) : undefined });
+  });
+
+program
+  .command('login')
+  .description('Connect a provider via OAuth so enrich / explore can use it (no per-token cost on your Copilot plan).')
+  .argument('<provider>', 'provider to connect — currently: copilot')
+  .action(async (provider: string) => {
+    await runLogin(provider);
   });
 
 // Deprecated alias for the old broker entry — now serve-only.

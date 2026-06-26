@@ -28,7 +28,9 @@
       "@ctx/services": ["src/services/index.ts"],
       "@ctx/services/*": ["src/services/*"],
       "@ctx/reducers/*": ["src/reducers/*"],
-      "@ctx/mcp/*": ["src/mcp/*"]
+      "@ctx/mcp/*": ["src/mcp/*"],
+      "@ctx/llm": ["src/llm/index.ts"],
+      "@ctx/llm/*": ["src/llm/*"]
     }
   },
   "include": ["src/**/*.ts"],

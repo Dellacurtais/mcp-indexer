@@ -24,6 +24,7 @@ import type { FileWatcherService } from '@ctx/services/services/watcher.js';
 import { disposeIndexerProcessResources } from '@ctx/indexer/bootstrap/dispose.js';
 import { buildToolRegistry } from '../../mcp/tools/index.js';
 import { shapeRegistry, resolveAllowlist } from '../../mcp/shaping.js';
+import { disposeAllSessions } from '../../mcp/tools/exec.js';
 import { SERVER_INSTRUCTIONS } from '../../mcp/instructions.js';
 import type { McpTool } from '../../mcp/tool.js';
 import type { ToolContext } from '../../mcp/context.js';
@@ -137,6 +138,11 @@ export async function runServe(rootArg: string | undefined, opts: ServeOpts): Pr
     shuttingDown = true;
     const watchdog = setTimeout(() => process.exit(1), 5000);
     watchdog.unref();
+    try {
+      disposeAllSessions(); // kill any opt-in exec sessions
+    } catch {
+      /* ignore */
+    }
     try {
       await watcher?.stopAll();
     } catch {
