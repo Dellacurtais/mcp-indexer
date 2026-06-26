@@ -1,5 +1,9 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
+import { readFileSync, statSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { runIndex } from './commands/index-cmd.js';
 import { runServe } from './commands/serve.js';
 import { runEnrich } from './commands/enrich.js';
@@ -11,8 +15,11 @@ import { runStatus, runSearch, runProjects } from './commands/query.js';
 const program = new Command();
 program
   .name(process.env.MCP_SERVER_NAME ?? 'code-context')
-  .description('Index a project and serve dense code-retrieval tools over MCP')
-  .version('0.1.0');
+  .description('Index a project and serve dense code-retrieval tools over MCP');
+
+// `-v` / `--version`: print version + build provenance so you can confirm the
+// running build matches your working tree in dev (git SHA + dirty + build time).
+program.option('-v, --version', 'print version, build info (git SHA + build time) and dist path');
 
 program
   .command('index')
@@ -151,6 +158,49 @@ program
   .action(async (root: string | undefined, opts: { embeddings?: boolean; watch?: boolean }) => {
     await runServe(root, { noEmbeddings: opts.embeddings === false, watch: opts.watch !== false });
   });
+
+function printVersion(): void {
+  const selfPath = fileURLToPath(import.meta.url);
+  const pkgRoot = join(dirname(selfPath), '..', '..'); // dist/cli -> repo/package root
+  let version = '0.1.0';
+  try {
+    version = (JSON.parse(readFileSync(join(pkgRoot, 'package.json'), 'utf8')) as { version?: string }).version ?? version;
+  } catch {
+    /* keep default */
+  }
+  let built = '';
+  try {
+    built = statSync(selfPath).mtime.toISOString().replace('T', ' ').slice(0, 19);
+  } catch {
+    /* ignore */
+  }
+  let git = '';
+  try {
+    const run = (args: string[]): string =>
+      execFileSync('git', ['-C', pkgRoot, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+    const sha = run(['rev-parse', '--short', 'HEAD']);
+    const branch = run(['rev-parse', '--abbrev-ref', 'HEAD']);
+    let dirty = '';
+    try {
+      dirty = run(['status', '--porcelain']) ? '-dirty' : '';
+    } catch {
+      /* ignore */
+    }
+    git = ` (${branch} ${sha}${dirty})`;
+  } catch {
+    /* not a git checkout (e.g. a published install) */
+  }
+  process.stdout.write(`code-context ${version}${git}\n`);
+  if (built) process.stdout.write(`  built: ${built}\n`);
+  process.stdout.write(`  dist:  ${selfPath}\n`);
+}
+
+// Handle -v / --version (and legacy -V) before commander parses subcommands.
+const versionFlags = new Set(['-v', '-V', '--version']);
+if (process.argv.slice(2).some((a) => versionFlags.has(a))) {
+  printVersion();
+  process.exit(0);
+}
 
 program.parseAsync(process.argv).catch((e) => {
   process.stderr.write(`[code-context] fatal: ${e instanceof Error ? e.stack ?? e.message : String(e)}\n`);
