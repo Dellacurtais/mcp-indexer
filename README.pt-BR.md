@@ -402,7 +402,7 @@ antes de adivinhar ou ler arquivos inteiros. (Prefira `.github/copilot-instructi
 | Arquivo / outline | `get_file_skeleton`, `get_file_structure`, `read_file`, `list_directory` |
 | Símbolos | `find_references`, `get_symbol_body`, `get_class_members`, `get_hierarchy`, `find_implementations`, `prepare_edit` |
 | Grafo | `get_dependencies`, `get_dependents` |
-| Explorar | `explore` — delega uma investigação ("ache/entenda/onde") a um modelo BARATO (definido no painel). Roda um loop somente-leitura sem limite de turnos e devolve um relatório markdown COMPLETO e sem cap (arquivos+linhas, símbolos, trechos, deps), pra o modelo caro não gastar token explorando |
+| Explorar | `explore` / `explore_result` — delega uma investigação ("ache/entenda/onde") a um modelo BARATO (definido no painel). Roda um loop somente-leitura sem limite de turnos e devolve um relatório markdown COMPLETO e sem cap (arquivos+linhas, símbolos, trechos, deps), pra o modelo caro não gastar token. Roda em BACKGROUND: o `explore` devolve o relatório se terminar rápido, senão um job id — consulte com `explore_result` (cada chamada faz long-poll abaixo do timeout do cliente) |
 | Índice | `reindex` (disparado pelo agente: constrói/atualiza o índice pelo chat — sem terminal) |
 
 Por padrão o `serve` expõe um **core enxuto** (~12 tools) — o agente escolhe melhor num conjunto

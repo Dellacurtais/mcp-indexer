@@ -1,5 +1,11 @@
 import type { DB } from './types.js';
 
+// SQLite's bind-parameter limit (999 on older builds; 32766 on newer). The
+// embed-backfill hash-gate passes one id per file/symbol, so on a large repo a
+// single `IN (...)` would overflow it ("too many SQL variables"). Batch under
+// the lowest limit, mirroring vectors.ts.
+const IN_CHUNK = 900;
+
 export interface EmbeddingCoverage {
   files_total: number;
   files_embedded: number;
@@ -27,11 +33,13 @@ export function sampleNotEmbeddedFiles(db: DB, projectId: number, limit = 5): Ar
 
 export function getFileHashes(db: DB, fileIds: number[]): Map<number, string | null> {
   const out = new Map<number, string | null>();
-  if (fileIds.length === 0) return out;
-  const placeholders = fileIds.map(() => '?').join(',');
-  const rows = db.prepare(`SELECT id, embedding_hash FROM files WHERE id IN (${placeholders})`)
-    .all(...fileIds) as Array<{ id: number; embedding_hash: string | null }>;
-  for (const r of rows) out.set(r.id, r.embedding_hash);
+  for (let i = 0; i < fileIds.length; i += IN_CHUNK) {
+    const batch = fileIds.slice(i, i + IN_CHUNK);
+    const placeholders = batch.map(() => '?').join(',');
+    const rows = db.prepare(`SELECT id, embedding_hash FROM files WHERE id IN (${placeholders})`)
+      .all(...batch) as Array<{ id: number; embedding_hash: string | null }>;
+    for (const r of rows) out.set(r.id, r.embedding_hash);
+  }
   return out;
 }
 
@@ -65,12 +73,14 @@ export function setFileStructureEmbedding(db: DB, fileId: number, embedding: Flo
 
 export function getSymbolHashes(db: DB, symbolIds: number[]): Map<number, { sig: string | null; body: string | null }> {
   const out = new Map<number, { sig: string | null; body: string | null }>();
-  if (symbolIds.length === 0) return out;
-  const placeholders = symbolIds.map(() => '?').join(',');
-  const rows = db.prepare(
-    `SELECT id, embedding_hash, body_embedding_hash FROM symbols WHERE id IN (${placeholders})`
-  ).all(...symbolIds) as Array<{ id: number; embedding_hash: string | null; body_embedding_hash: string | null }>;
-  for (const r of rows) out.set(r.id, { sig: r.embedding_hash, body: r.body_embedding_hash });
+  for (let i = 0; i < symbolIds.length; i += IN_CHUNK) {
+    const batch = symbolIds.slice(i, i + IN_CHUNK);
+    const placeholders = batch.map(() => '?').join(',');
+    const rows = db.prepare(
+      `SELECT id, embedding_hash, body_embedding_hash FROM symbols WHERE id IN (${placeholders})`
+    ).all(...batch) as Array<{ id: number; embedding_hash: string | null; body_embedding_hash: string | null }>;
+    for (const r of rows) out.set(r.id, { sig: r.embedding_hash, body: r.body_embedding_hash });
+  }
   return out;
 }
 

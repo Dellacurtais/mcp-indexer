@@ -66,8 +66,8 @@ test('index + serve + core tools', async (t) => {
 
   await withServer(env, async (client) => {
     const names = (await client.listTools()).tools.map((x) => x.name);
-    assert.equal(names.length, 12, `expected 12 core tools, got ${names.length}: ${names.join(',')}`);
-    for (const tool of ['pack_context', 'search', 'get_file_skeleton', 'read_file', 'reindex', 'explore']) {
+    assert.equal(names.length, 13, `expected 13 core tools, got ${names.length}: ${names.join(',')}`);
+    for (const tool of ['pack_context', 'search', 'get_file_skeleton', 'read_file', 'reindex', 'explore', 'explore_result']) {
       assert.ok(names.includes(tool), `missing core tool ${tool}`);
     }
     assert.ok(!names.includes('exec_command'), 'exec must be hidden by default');

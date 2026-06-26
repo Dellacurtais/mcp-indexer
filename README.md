@@ -379,7 +379,7 @@ emerging cross-tool standard and coexists with it — JetBrains also reads neste
 | File / outline | `get_file_skeleton`, `get_file_structure`, `read_file`, `list_directory` |
 | Symbols | `find_references`, `get_symbol_body`, `get_class_members`, `get_hierarchy`, `find_implementations`, `prepare_edit` |
 | Graph | `get_dependencies`, `get_dependents` |
-| Explore | `explore` — delegate a "find/understand/where" investigation to a CHEAP model (set in the dashboard). It runs a no-turn-limit read-only loop and returns a FULL, uncapped markdown report (files+lines, symbols, snippets, deps), so the expensive model spends no tokens exploring |
+| Explore | `explore` / `explore_result` — delegate a "find/understand/where" investigation to a CHEAP model (set in the dashboard). It runs a no-turn-limit read-only loop and returns a FULL, uncapped markdown report (files+lines, symbols, snippets, deps), so the expensive model spends no tokens exploring. Runs in the BACKGROUND: `explore` returns the report if it finishes fast, else a job id — poll it with `explore_result` (each call long-polls under the client timeout) |
 | Index | `reindex` (agent-triggered build/refresh from chat — no terminal needed) |
 
 By default `serve` advertises a **lean core** (~12 tools) — agents pick tools more accurately from a
