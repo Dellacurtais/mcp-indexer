@@ -50,6 +50,8 @@ export interface ChatOptions {
 export interface ChatUsage {
   inputTokens: number;
   outputTokens: number;
+  /** Cached (prompt-cache) input tokens the provider reports, when available. */
+  cachedInputTokens?: number;
 }
 
 export type FinishReason = 'stop' | 'tool_calls' | 'length' | 'other';

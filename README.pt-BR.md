@@ -258,6 +258,10 @@ Abre um painel local no navegador (`http://127.0.0.1:7333`) com três abas:
   inference-profile (`us./eu./apac.`) é resolvido automaticamente. Botão **"Testar conexão"** valida as
   credenciais e o modelo escolhido (faz um Converse de 1 token) antes de salvar.
 - **Busca** — playground que chama a mesma API híbrida do `serve` e mostra os resultados ranqueados.
+- **Explorer** — telemetria de cada run do `agent_explore` (inclusive falhas): o trail de tool calls,
+  uso de tokens (entrada/saída/cache), custo, duração, stop reason e o relatório markdown completo.
+  Clique numa run pra inspecionar o trail + relatório. Guardado localmente em `~/.code-context/index.db`
+  (tabela `explore_runs`).
 
 As credenciais são salvas em `~/.code-context/.env` (o mesmo arquivo lido pela CLI). O servidor escuta
 **apenas em `127.0.0.1`** (loopback) — suas credenciais AWS nunca saem da sua máquina.

@@ -23,6 +23,26 @@ CREATE TABLE IF NOT EXISTS costs (
         created_at TEXT NOT NULL DEFAULT (datetime('now'))
       );
 
+CREATE TABLE IF NOT EXISTS explore_runs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        task TEXT NOT NULL DEFAULT '',
+        model TEXT NOT NULL DEFAULT '',
+        status TEXT NOT NULL DEFAULT 'done',
+        stop_reason TEXT NOT NULL DEFAULT '',
+        duration_ms INTEGER NOT NULL DEFAULT 0,
+        tool_calls INTEGER NOT NULL DEFAULT 0,
+        input_tokens INTEGER NOT NULL DEFAULT 0,
+        output_tokens INTEGER NOT NULL DEFAULT 0,
+        cached_input_tokens INTEGER NOT NULL DEFAULT 0,
+        cost_usd REAL NOT NULL DEFAULT 0,
+        trail TEXT NOT NULL DEFAULT '[]',
+        report TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+
+CREATE INDEX IF NOT EXISTS idx_explore_runs_project ON explore_runs(project_id, created_at DESC);
+
 CREATE TABLE IF NOT EXISTS embedding_configs (
         id         TEXT PRIMARY KEY,
         kind       TEXT NOT NULL,

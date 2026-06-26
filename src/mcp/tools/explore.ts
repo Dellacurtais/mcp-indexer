@@ -169,17 +169,69 @@ const agentExplore = defineTool({
       },
     )
       .then((res) => {
-        job.status = 'done';
+        job.status = res.stopReason === 'error' ? 'error' : 'done';
         job.report = res.report;
         job.toolCalls = res.toolCalls;
         job.spentUsd = res.spentUsd;
         job.stopReason = res.stopReason;
         job.finishedAt = Date.now();
+        // Persist telemetry (every run, incl. error stops). Never let a persist
+        // failure mask the report.
+        try {
+          ctx.db.insertExploreRun({
+            projectId: project.id,
+            task: fullTask,
+            model: job.model,
+            status: job.status,
+            stopReason: res.stopReason,
+            durationMs: res.durationMs,
+            toolCalls: res.toolCalls,
+            inputTokens: res.usage.inputTokens,
+            outputTokens: res.usage.outputTokens,
+            cachedInputTokens: res.usage.cachedInputTokens,
+            costUsd: res.spentUsd,
+            trail: res.trail,
+            report: res.report,
+          });
+          if (res.spentUsd > 0) {
+            ctx.db.insertCost({
+              projectId: project.id,
+              provider: provider.name,
+              model: provider.model,
+              operation: 'explore',
+              inputTokens: res.usage.inputTokens,
+              outputTokens: res.usage.outputTokens,
+              costUsd: res.spentUsd,
+            });
+          }
+        } catch (e) {
+          process.stderr.write(`[code-context] explore: failed to persist run — ${e instanceof Error ? e.message : String(e)}\n`);
+        }
       })
       .catch((e) => {
+        // Unexpected throw (runExplorer normally resolves even on 'error' stop).
         job.status = 'error';
         job.error = e instanceof Error ? e.message : String(e);
         job.finishedAt = Date.now();
+        try {
+          ctx.db.insertExploreRun({
+            projectId: project.id,
+            task: fullTask,
+            model: job.model,
+            status: 'error',
+            stopReason: 'error',
+            durationMs: Date.now() - job.startedAt,
+            toolCalls: job.toolCalls,
+            inputTokens: 0,
+            outputTokens: 0,
+            cachedInputTokens: 0,
+            costUsd: job.spentUsd,
+            trail: [],
+            report: `explore failed: ${job.error}`,
+          });
+        } catch {
+          /* ignore */
+        }
       })
       .finally(() => resolveDone());
 

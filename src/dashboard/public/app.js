@@ -13,11 +13,12 @@ function activateTab(tab) {
   if (tab === 'projects') loadProjects();
   if (tab === 'config') loadConfig();
   if (tab === 'search') populateProjectSelect();
+  if (tab === 'explore') loadExploreProjects();
 }
 window.addEventListener('hashchange', () => activateTab(currentTab()));
 function currentTab() {
   const t = (location.hash || '#projects').slice(1);
-  return ['projects', 'config', 'search'].includes(t) ? t : 'projects';
+  return ['projects', 'config', 'search', 'explore'].includes(t) ? t : 'projects';
 }
 
 // ─── projects ─────────────────────────────────────────────────────────────────
@@ -473,6 +474,90 @@ $('#btn-search').addEventListener('click', async () => {
     out.innerHTML = `<p class="error">Erro: ${esc(String(e))}</p>`;
   }
 });
+
+// ─── explorer telemetry ────────────────────────────────────────────────────────
+const fmtNum = (n) => (n ?? 0).toLocaleString('pt-BR');
+const fmtDur = (ms) => (ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`);
+
+async function loadExploreProjects() {
+  try {
+    const { projects } = await api('/api/projects');
+    const sel = $('#explore-project');
+    const prev = sel.value;
+    sel.innerHTML = projects.length
+      ? projects.map((p) => `<option value="${p.id}">${esc(p.name)}</option>`).join('')
+      : '<option value="">nenhum projeto</option>';
+    if (prev && projects.some((p) => String(p.id) === prev)) sel.value = prev;
+    loadExploreRuns();
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+async function loadExploreRuns() {
+  const out = $('#explore-runs');
+  const projectId = $('#explore-project').value;
+  $('#explore-detail').classList.add('hidden');
+  if (!projectId) {
+    out.innerHTML = '<p class="muted">Selecione um projeto.</p>';
+    return;
+  }
+  out.innerHTML = '<p class="muted">carregando…</p>';
+  try {
+    const { runs, error } = await api(`/api/explore/runs?projectId=${encodeURIComponent(projectId)}`);
+    if (error) {
+      out.innerHTML = `<p class="error">${esc(error)}</p>`;
+      return;
+    }
+    if (!runs.length) {
+      out.innerHTML = '<p class="muted">Nenhuma run ainda. Rode <code>agent_explore</code> no editor.</p>';
+      return;
+    }
+    out.innerHTML = runs
+      .map((r) => {
+        const badge =
+          r.status === 'error' ? '<span class="error">erro</span>' : `<span class="score">${esc(r.stop_reason)}</span>`;
+        return `<div class="result-row explore-run" data-id="${r.id}" style="cursor:pointer">
+          <div><strong>${esc(r.task)}</strong> ${badge}</div>
+          <div class="muted">${esc(r.model)} · ${r.tool_calls} tools · in ${fmtNum(r.input_tokens)} / out ${fmtNum(r.output_tokens)} / cache ${fmtNum(r.cached_input_tokens)} tok · $${(r.cost_usd || 0).toFixed(4)} · ${fmtDur(r.duration_ms)} · ${esc(r.created_at)}</div>
+        </div>`;
+      })
+      .join('');
+    $$('.explore-run').forEach((el) => el.addEventListener('click', () => showExploreRun(el.dataset.id)));
+  } catch (e) {
+    out.innerHTML = `<p class="error">Erro: ${esc(String(e))}</p>`;
+  }
+}
+
+async function showExploreRun(id) {
+  try {
+    const { run, error } = await api(`/api/explore/runs/${encodeURIComponent(id)}`);
+    if (error || !run) return;
+    $('#explore-detail').classList.remove('hidden');
+    $('#explore-detail-title').textContent = run.task;
+    $('#explore-detail-meta').innerHTML =
+      `${esc(run.model)} · status ${esc(run.status)} (${esc(run.stop_reason)}) · ${run.tool_calls} tool calls · ` +
+      `tokens in ${fmtNum(run.input_tokens)} / out ${fmtNum(run.output_tokens)} / cache ${fmtNum(run.cached_input_tokens)} · ` +
+      `$${(run.cost_usd || 0).toFixed(4)} · ${fmtDur(run.duration_ms)} · ${esc(run.created_at)}`;
+    $('#explore-detail-trail').innerHTML =
+      (run.trail || [])
+        .map(
+          (t, i) =>
+            `<div class="result-row"><span class="kind">${i + 1}. ${esc(t.name)}</span> <span class="muted">${t.ok ? 'ok' : 'erro'} · ${t.ms}ms · ${fmtNum(t.outputBytes)}B</span>
+            <div class="path">${esc(JSON.stringify(t.args))}</div>
+            <pre class="log" style="max-height:120px">${esc(t.snippet || '')}</pre></div>`,
+        )
+        .join('') || '<p class="muted">sem tool calls</p>';
+    $('#explore-detail-report').textContent = run.report || '(vazio)';
+    $('#explore-detail').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+$('#explore-project').addEventListener('change', loadExploreRuns);
+$('#btn-explore-refresh').addEventListener('click', loadExploreRuns);
+$('#btn-explore-close').addEventListener('click', () => $('#explore-detail').classList.add('hidden'));
 
 // ─── utils ────────────────────────────────────────────────────────────────────
 function esc(s) {

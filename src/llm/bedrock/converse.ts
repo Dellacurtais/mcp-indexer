@@ -20,7 +20,7 @@ export interface ConverseCreds {
 interface ConverseClient {
   send: (cmd: unknown) => Promise<{
     output?: { message?: { content?: Array<Record<string, unknown>> } };
-    usage?: { inputTokens?: number; outputTokens?: number };
+    usage?: { inputTokens?: number; outputTokens?: number; cacheReadInputTokens?: number };
     stopReason?: string;
   }>;
 }
@@ -171,7 +171,11 @@ export async function converse(creds: ConverseCreds, req: ConverseRequest): Prom
   return {
     text,
     toolCalls: toolCalls.length ? toolCalls : undefined,
-    usage: { inputTokens: resp.usage?.inputTokens ?? 0, outputTokens: resp.usage?.outputTokens ?? 0 },
+    usage: {
+      inputTokens: resp.usage?.inputTokens ?? 0,
+      outputTokens: resp.usage?.outputTokens ?? 0,
+      cachedInputTokens: resp.usage?.cacheReadInputTokens ?? 0,
+    },
     stopReason: resp.stopReason ?? 'end_turn',
   };
 }

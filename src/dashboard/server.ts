@@ -21,6 +21,7 @@ import { projectsApp } from './routes/projects.js';
 import { configApp } from './routes/config.js';
 import { searchApp } from './routes/search.js';
 import { copilotApp } from './routes/copilot.js';
+import { exploreApp } from './routes/explore.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -84,6 +85,7 @@ export function buildDashboardApp(): Hono {
   app.route('/api', configApp); // /api/config, /api/models, /api/config/test-aws
   app.route('/api', searchApp); // /api/search
   app.route('/api', copilotApp); // /api/copilot/*
+  app.route('/api', exploreApp); // /api/explore/runs*
 
   // Static frontend — manual file serving (robust in both dev and built layouts).
   app.get('*', async (c) => {

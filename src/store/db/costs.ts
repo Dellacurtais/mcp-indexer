@@ -6,7 +6,7 @@ export interface InsertCostData {
   runId?: number;
   provider: string;
   model: string;
-  operation: 'analysis' | 'embedding';
+  operation: 'analysis' | 'embedding' | 'explore';
   filePath?: string;
   inputTokens: number;
   outputTokens: number;

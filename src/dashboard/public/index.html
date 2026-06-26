@@ -13,6 +13,7 @@
       <a href="#projects" class="tab" data-tab="projects">Projetos</a>
       <a href="#config" class="tab" data-tab="config">Configuração</a>
       <a href="#search" class="tab" data-tab="search">Busca</a>
+      <a href="#explore" class="tab" data-tab="explore">Explorer</a>
     </nav>
   </header>
 
@@ -176,6 +177,31 @@
           <button id="btn-search" class="primary">Buscar</button>
         </div>
         <div id="search-results" class="results"></div>
+      </div>
+    </section>
+
+    <!-- Explorer (telemetria do sub-agente) -->
+    <section id="view-explore" class="view hidden">
+      <div class="view-head"><h2>Explorer — runs do sub-agente</h2></div>
+      <div class="card">
+        <div class="row">
+          <label>Projeto
+            <select id="explore-project"></select>
+          </label>
+          <button id="btn-explore-refresh" class="ghost">Atualizar</button>
+        </div>
+        <div id="explore-runs" class="results"><p class="muted">Selecione um projeto.</p></div>
+      </div>
+      <div id="explore-detail" class="card hidden">
+        <div class="view-head">
+          <h3 id="explore-detail-title">Run</h3>
+          <button id="btn-explore-close" class="ghost">Fechar</button>
+        </div>
+        <div id="explore-detail-meta" class="muted"></div>
+        <h4>Tool calls</h4>
+        <div id="explore-detail-trail" class="results"></div>
+        <h4>Relatório</h4>
+        <pre id="explore-detail-report" class="log"></pre>
       </div>
     </section>
   </main>

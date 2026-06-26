@@ -34,6 +34,7 @@ import * as snapshotsArchive from './db/snapshots-archive.js';
 import * as memoryConsolidation from './db/memory-consolidation.js';
 import * as memoryDistillLog from './db/memory-distill-log.js';
 import * as costs from './db/costs.js';
+import * as exploreRuns from './db/explore-runs.js';
 import * as webhooks from './db/webhooks.js';
 import * as vectors from './db/vectors.js';
 import * as embeddings from './db/embeddings.js';
@@ -725,6 +726,12 @@ export class CodeIndexDB {
   getCostSummary(projectId: number, since?: string): CostSummary { return costs.projectSummary(this.db, projectId, since); }
   getGlobalCostSummary(since?: string): CostSummary { return costs.globalSummary(this.db, since); }
   getRunCostSummary(runId: number): costs.RunCostSummary { return costs.runSummary(this.db, runId); }
+
+  // ─── Explorer runs (agent_explore telemetry) ────────────────────
+  // CENTRAL, like costs/runs. One row per agent_explore run (incl. failures).
+  insertExploreRun(data: exploreRuns.InsertExploreRunData): number { return exploreRuns.insert(this.db, data); }
+  getExploreRun(id: number): exploreRuns.ExploreRunRow | undefined { return exploreRuns.get(this.db, id); }
+  listExploreRuns(projectId: number, limit = 50): exploreRuns.ExploreRunListRow[] { return exploreRuns.listByProject(this.db, projectId, limit); }
 
   // ─── Webhooks ───────────────────────────────────────────────────
   createWebhook(data: webhooks.CreateWebhookData): Webhook { return webhooks.create(this.db, data); }

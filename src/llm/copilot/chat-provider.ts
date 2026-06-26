@@ -57,7 +57,7 @@ interface OpenAIToolCall {
 }
 interface OpenAIResponse {
   choices?: Array<{ message?: { content?: string | null; tool_calls?: OpenAIToolCall[] }; finish_reason?: string }>;
-  usage?: { prompt_tokens?: number; completion_tokens?: number };
+  usage?: { prompt_tokens?: number; completion_tokens?: number; prompt_tokens_details?: { cached_tokens?: number } };
 }
 
 function toChatMessages(messages: ChatMessage[]): unknown[] {
@@ -99,7 +99,7 @@ interface ResponsesResponse {
   output?: ResponsesOutputItem[];
   output_text?: string;
   status?: string;
-  usage?: { input_tokens?: number; output_tokens?: number };
+  usage?: { input_tokens?: number; output_tokens?: number; input_tokens_details?: { cached_tokens?: number } };
 }
 
 /** Map our messages into Responses `input` items (function calls/outputs are flat items). */
@@ -187,7 +187,11 @@ export class CopilotChatProvider implements ChatProvider {
     const toolCalls: ToolCall[] = (msg.tool_calls ?? [])
       .filter((tc) => tc.function?.name)
       .map((tc) => ({ id: tc.id ?? '', name: tc.function!.name as string, arguments: safeJsonParse(tc.function?.arguments) }));
-    const usage: ChatUsage = { inputTokens: data.usage?.prompt_tokens ?? 0, outputTokens: data.usage?.completion_tokens ?? 0 };
+    const usage: ChatUsage = {
+      inputTokens: data.usage?.prompt_tokens ?? 0,
+      outputTokens: data.usage?.completion_tokens ?? 0,
+      cachedInputTokens: data.usage?.prompt_tokens_details?.cached_tokens ?? 0,
+    };
     return { text, toolCalls: toolCalls.length ? toolCalls : undefined, usage, finishReason: mapFinish(choice?.finish_reason, toolCalls.length > 0) };
   }
 
@@ -218,11 +222,17 @@ export class CopilotChatProvider implements ChatProvider {
       if (item.type === 'function_call' && item.name) {
         toolCalls.push({ id: item.call_id ?? item.id ?? '', name: item.name, arguments: safeJsonParse(item.arguments) });
       } else if (item.type === 'message' || item.role === 'assistant') {
-        for (const p of item.content ?? []) if (p.type === 'output_text' && typeof p.text === 'string') text += p.text;
+        // Collect ANY text content part (not only type==='output_text') — reasoning
+        // models vary the part type, and missing this is how a wrap-up came back blank.
+        for (const p of item.content ?? []) if (typeof p.text === 'string') text += p.text;
       }
     }
     if (!text && typeof data.output_text === 'string') text = data.output_text;
-    const usage: ChatUsage = { inputTokens: data.usage?.input_tokens ?? 0, outputTokens: data.usage?.output_tokens ?? 0 };
+    const usage: ChatUsage = {
+      inputTokens: data.usage?.input_tokens ?? 0,
+      outputTokens: data.usage?.output_tokens ?? 0,
+      cachedInputTokens: data.usage?.input_tokens_details?.cached_tokens ?? 0,
+    };
     return { text, toolCalls: toolCalls.length ? toolCalls : undefined, usage, finishReason: mapFinish(data.status, toolCalls.length > 0) };
   }
 

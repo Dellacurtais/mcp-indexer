@@ -160,6 +160,9 @@ code-context projects                   # list every indexed project
   stored in the local SQLite DB, never in the `.env`. Changing a process-start setting prompts you to
   restart `code-context serve` in the editor.
 - **Busca** — a hybrid-search playground against any indexed project.
+- **Explorer** — telemetry for every `agent_explore` run (incl. failures): the tool-call trail, token
+  usage (input/output/cached), cost, duration, stop reason, and the full markdown report. Click a run
+  to inspect its trail + report. Stored locally in `~/.code-context/index.db` (`explore_runs` table).
 
 ---
 
