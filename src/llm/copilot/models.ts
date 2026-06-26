@@ -16,6 +16,7 @@ interface RawModel {
   name?: string;
   capabilities?: { type?: string };
   model_picker_enabled?: boolean;
+  policy?: { state?: string };
 }
 
 export async function listCopilotModels(store: ProviderStore, providerId = 'copilot'): Promise<CopilotModel[]> {
@@ -33,6 +34,7 @@ export async function listCopilotModels(store: ProviderStore, providerId = 'copi
     if (!id || seen.has(id)) continue;
     const type = m.capabilities?.type;
     if (type && type !== 'chat') continue; // drop embeddings / non-chat
+    if (m.policy?.state && m.policy.state !== 'enabled') continue; // drop disabled/needs-enabling
     seen.add(id);
     out.push({ id, name: m.name ?? id });
   }
